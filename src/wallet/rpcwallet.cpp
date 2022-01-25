@@ -726,7 +726,7 @@ static CAmount GetReceived(const CWallet& wallet, const UniValue& params, bool b
     CAmount amount = 0;
     for (const std::pair<const uint256, CWalletTx>& wtx_pair : wallet.mapWallet) {
         const CWalletTx& wtx = wtx_pair.second;
-        if (wtx.IsCoinBase() || !wallet.chain().checkFinalTx(*wtx.tx)) {
+        if (wtx.IsCoinBase()) {
             continue;
         }
         if (wtx.GetDepthInMainChain() < min_depth && !(fAddLocked && wtx.IsLockedByInstantSend())) continue;
@@ -1123,7 +1123,7 @@ static UniValue ListReceived(const CWallet& wallet, const UniValue& params, bool
     for (const std::pair<const uint256, CWalletTx>& pairWtx : wallet.mapWallet) {
         const CWalletTx& wtx = pairWtx.second;
 
-        if (wtx.IsCoinBase() || !wallet.chain().checkFinalTx(*wtx.tx))
+        if (wtx.IsCoinBase())
             continue;
 
         int nDepth = wtx.GetDepthInMainChain();
