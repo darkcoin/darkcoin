@@ -760,7 +760,7 @@ private:
     typedef std::multimap<COutPoint, uint256> TxSpends;
     TxSpends mapTxSpends GUARDED_BY(cs_wallet);
     void AddToSpends(const COutPoint& outpoint, const uint256& wtxid) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
-    void AddToSpends(const uint256& wtxid) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    void AddToSpends(const CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
 
     std::set<COutPoint> setWalletUTXO;
     mutable std::map<COutPoint, int> mapOutpointRoundsCache GUARDED_BY(cs_wallet);

@@ -638,16 +638,13 @@ void CWallet::AddToSpends(const COutPoint& outpoint, const uint256& wtxid)
 }
 
 
-void CWallet::AddToSpends(const uint256& wtxid)
+void CWallet::AddToSpends(const CWalletTx& wtx)
 {
-    auto it = mapWallet.find(wtxid);
-    assert(it != mapWallet.end());
-    const CWalletTx& thisTx = it->second;
-    if (thisTx.IsCoinBase()) // Coinbases don't spend anything!
+    if (wtx.IsCoinBase()) // Coinbases don't spend anything!
         return;
 
-    for (const CTxIn& txin : thisTx.tx->vin)
-        AddToSpends(txin.prevout, wtxid);
+    for (const CTxIn& txin : wtx.tx->vin)
+        AddToSpends(txin.prevout, wtx.GetHash());
 }
 
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
@@ -915,12 +912,12 @@ CWalletTx* CWallet::AddToWallet(CTransactionRef tx, const CWalletTx::Confirmatio
         wtx.nOrderPos = IncOrderPosNext(&batch);
         wtx.m_it_wtxOrdered = wtxOrdered.insert(std::make_pair(wtx.nOrderPos, &wtx));
         wtx.nTimeSmart = ComputeTimeSmart(wtx);
-        AddToSpends(hash);
+        AddToSpends(wtx);
 
         std::vector<std::pair<const CTransactionRef&, unsigned int>> outputs;
         for(unsigned int i = 0; i < wtx.tx->vout.size(); ++i) {
-            if (IsMine(wtx.tx->vout[i]) && !IsSpent(hash, i)) {
-                setWalletUTXO.insert(COutPoint(hash, i));
+            if (IsMine(wtx.tx->vout[i]) && !IsSpent(wtx, i)) {
+                setWalletUTXO.insert(COutPoint(wtx, i));
                 outputs.emplace_back(wtx.tx, i);
             }
         }
@@ -1044,7 +1041,7 @@ bool CWallet::LoadToWallet(const uint256& hash, const UpdateWalletTxFn& fill_wtx
     if (/* insertion took place */ ins.second) {
         wtx.m_it_wtxOrdered = wtxOrdered.insert(std::make_pair(wtx.nOrderPos, &wtx));
     }
-    AddToSpends(hash);
+    AddToSpends(wtx);
     for (const CTxIn& txin : wtx.tx->vin) {
         auto it = mapWallet.find(txin.prevout.hash);
         if (it != mapWallet.end()) {
