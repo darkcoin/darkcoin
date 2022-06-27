@@ -938,7 +938,7 @@ std::unordered_set<uint256, StaticSaltedHasher> CInstantSendManager::ProcessPend
         for (const auto& nodeId : batchVerifier.badSources) {
             // Let's not be too harsh, as the peer might simply be unlucky and might have sent us an old lock which
             // does not validate anymore due to changed quorums
-            peerman.Misbehaving(nodeId, 20);
+            peerman.UnitTestMisbehaving(nodeId, 20);
         }
     }
     for (const auto& p : pend) {
