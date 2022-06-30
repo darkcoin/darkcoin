@@ -631,7 +631,7 @@ public:
     void RelayRecoveredSig(const uint256& sigHash) override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex);
     void RelayDSQ(const CCoinJoinQueue& queue) override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex);
     void SetBestHeight(int height) override { m_best_height = height; };
-    void UnitTestMisbehaving(NodeId peer_id, const int howmuch, const std::string& message = "") override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex) { Misbehaving(*Assert(GetPeerRef(peer_id)), howmuch, ""); };
+    void UnitTestMisbehaving(NodeId peer_id, const int howmuch) override EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex) { Misbehaving(*Assert(GetPeerRef(peer_id)), howmuch, ""); };
     void ProcessMessage(CNode& pfrom, const std::string& msg_type, CDataStream& vRecv,
                         const std::chrono::microseconds time_received, const std::atomic<bool>& interruptMsgProc) override
         EXCLUSIVE_LOCKS_REQUIRED(!m_peer_mutex, !m_recent_confirmed_transactions_mutex, g_msgproc_mutex);
@@ -3614,13 +3614,12 @@ void PeerManagerImpl::ProcessMessage(
         }
 
         if (Params().NetworkIDString() == CBaseChainParams::DEVNET) {
-            PeerRef peer{GetPeerRef(pfrom.GetId())};
             if (cleanSubVer.find(strprintf("devnet.%s", gArgs.GetDevNetName())) == std::string::npos) {
                 LogPrintf("connected to wrong devnet. Reported version is %s, expected devnet name is %s\n", cleanSubVer, gArgs.GetDevNetName());
-                if (peer && !pfrom.IsInboundConn())
-                    Misbehaving(*peer, 100); // don't try to connect again
+                if (!pfrom.IsInboundConn())
+                    UnitTestMisbehaving(pfrom.GetId(), 100); // don't try to connect again
                 else
-                    Misbehaving(*peer, 1); // whover connected, might just have made a mistake, don't ban him immediately
+                    UnitTestMisbehaving(pfrom.GetId(), 1); // whover connected, might just have made a mistake, don't ban him immediately
                 pfrom.fDisconnect = true;
                 return;
             }
@@ -5197,7 +5196,6 @@ void PeerManagerImpl::ProcessMessage(
         return;
     }
 
-    PeerRef peer{GetPeerRef(pfrom.GetId())};
     if (msg_type == NetMsgType::MNLISTDIFF) {
         // we have never requested this
         if (peer) Misbehaving(*peer, 100, strprintf("received not-requested mnlistdiff. peer=%d", pfrom.GetId()));

@@ -130,6 +130,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendrawtransaction", 3, "bypasslimits" },
     { "testmempoolaccept", 0, "rawtxs" },
     { "testmempoolaccept", 1, "maxfeerate" },
+    { "submitpackage", 0, "package" },
     { "combinerawtransaction", 0, "txs" },
     { "fundrawtransaction", 1, "options" },
     { "walletcreatefundedpsbt", 0, "inputs" },

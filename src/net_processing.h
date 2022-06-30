@@ -124,7 +124,7 @@ public:
     virtual void SetBestHeight(int height) = 0;
 
     /* Public for unit testing. */
-    virtual void UnitTestMisbehaving(NodeId peer_id, int howmuch, const std::string& message = "") = 0;
+    virtual void UnitTestMisbehaving(NodeId peer_id, int howmuch) = 0;
 
     /**
      * Evict extra outbound peers. If we think our tip may be stale, connect to an extra outbound.
