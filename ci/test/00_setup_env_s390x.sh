@@ -22,4 +22,4 @@ export RUN_UNIT_TESTS=true
 export TEST_RUNNER_ENV="LC_ALL=C"
 export RUN_FUNCTIONAL_TESTS=true
 export GOAL="install"
-export BITCOIN_CONFIG="--enable-reduce-exports --disable-gui-tests --with-boost-process"  # GUI tests disabled for now, see https://github.com/bitcoin/bitcoin/issues/23730
+export BITCOIN_CONFIG="--enable-reduce-exports --disable-gui-tests"  # GUI tests disabled for now, see https://github.com/bitcoin/bitcoin/issues/23730

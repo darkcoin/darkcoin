@@ -8,9 +8,14 @@
 
 #include <support/allocators/secure.h>
 
-#ifdef HAVE_BOOST_PROCESS
+#ifdef ENABLE_EXTERNAL_SIGNER
+#if defined(WIN32) && !defined(__kernel_entry)
+// A workaround for boost 1.71 incompatibility with mingw-w64 compiler.
+// For details see https://github.com/bitcoin/bitcoin/pull/22348.
+#define __kernel_entry
+#endif
 #include <boost/process.hpp>
-#endif // HAVE_BOOST_PROCESS
+#endif // ENABLE_EXTERNAL_SIGNER
 
 #include <chainparamsbase.h>
 #include <ctpl_stl.h>
@@ -1304,9 +1309,9 @@ void RenameThreadPool(ctpl::thread_pool& tp, const char* baseName)
     }
 }
 
-#ifdef HAVE_BOOST_PROCESS
 UniValue RunCommandParseJSON(const std::string& str_command, const std::string& str_std_in)
 {
+#ifdef ENABLE_EXTERNAL_SIGNER
     namespace bp = boost::process;
 
     UniValue result_json;
@@ -1338,8 +1343,10 @@ UniValue RunCommandParseJSON(const std::string& str_command, const std::string& 
     if (!result_json.read(result)) throw std::runtime_error("Unable to parse JSON: " + result);
 
     return result_json;
+#else
+    throw std::runtime_error("Compiled without external signing support (required for external signing).");
+#endif // ENABLE_EXTERNAL_SIGNER
 }
-#endif // HAVE_BOOST_PROCESS
 
 void SetupEnvironment()
 {

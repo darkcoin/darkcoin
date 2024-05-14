@@ -2593,6 +2593,7 @@ static RPCHelpMan getwalletinfo()
                                      {RPCResult::Type::NUM, "progress", "scanning progress percentage [0.0, 1.0]"},
                                 }},
                             {RPCResult::Type::BOOL, "descriptors", "whether this wallet uses descriptors for scriptPubKey management"},
+                            {RPCResult::Type::BOOL, "external_signer", "whether this wallet is configured to use an external signer such as a hardware wallet"},
                         },
                 },
                 RPCExamples{
@@ -2670,6 +2671,7 @@ static RPCHelpMan getwalletinfo()
         obj.pushKV("scanning", false);
     }
     obj.pushKV("descriptors", pwallet->IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS));
+    obj.pushKV("external_signer", pwallet->IsWalletFlagSet(WALLET_FLAG_EXTERNAL_SIGNER));
     return obj;
 },
     };
@@ -2979,6 +2981,7 @@ static RPCHelpMan createwallet()
             {"avoid_reuse", RPCArg::Type::BOOL, /* default */ "false", "Keep track of coin reuse, and treat dirty and clean coins differently with privacy considerations in mind."},
             {"descriptors", RPCArg::Type::BOOL, /* default */ "false", "Create a native descriptor wallet. The wallet will use descriptors internally to handle address creation"},
             {"load_on_startup", RPCArg::Type::BOOL, /* default */ "null", "Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged."},
+            {"external_signer", RPCArg::Type::BOOL, /* default */ "false", "Use an external signer such as a hardware wallet. Requires -signer to be configured. Wallet creation will fail if keys cannot be fetched. Requires disable_private_keys and descriptors set to true."},
         },
         RPCResult{
             RPCResult::Type::OBJ, "", "",
@@ -3024,6 +3027,13 @@ static RPCHelpMan createwallet()
 #endif
         flags |= WALLET_FLAG_DESCRIPTORS;
         warnings.emplace_back(Untranslated("Wallet is an experimental descriptor wallet"));
+    }
+    if (!request.params[7].isNull() && request.params[7].get_bool()) {
+#ifdef ENABLE_EXTERNAL_SIGNER
+        flags |= WALLET_FLAG_EXTERNAL_SIGNER;
+#else
+        throw JSONRPCError(RPC_WALLET_ERROR, "Compiled without external signing support (required for external signing)");
+#endif
     }
 
 #ifndef USE_BDB
@@ -4233,8 +4243,11 @@ static RPCHelpMan send()
     // Make a blank psbt
     PartiallySignedTransaction psbtx(rawTx);
 
-    // Fill transaction with our data and sign
-    bool complete = true;
+    
+    // First fill transaction with our data without signing,
+    // so external signers are not asked sign more than once.
+    bool complete;
+    pwallet->FillPSBT(psbtx, complete, SIGHASH_ALL, false, true);
     const TransactionError err = pwallet->FillPSBT(psbtx, complete, SIGHASH_ALL, true, false);
     if (err != TransactionError::OK) {
         throw JSONRPCTransactionError(err);
@@ -4602,6 +4615,48 @@ static RPCHelpMan upgradewallet()
     };
 }
 
+#ifdef ENABLE_EXTERNAL_SIGNER
+static RPCHelpMan walletdisplayaddress()
+{
+    return RPCHelpMan{"walletdisplayaddress",
+        "Display address on an external signer for verification.",
+        {
+            {"address",     RPCArg::Type::STR, RPCArg::Optional::NO, /* default_val */ "", "bitcoin address to display"},
+        },
+        RPCResult{
+            RPCResult::Type::OBJ,"","",
+            {
+                {RPCResult::Type::STR, "address", "The address as confirmed by the signer"},
+            }
+        },
+        RPCExamples{""},
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+        {
+            std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+            if (!wallet) return NullUniValue;
+            CWallet* const pwallet = wallet.get();
+
+            LOCK(pwallet->cs_wallet);
+
+            CTxDestination dest = DecodeDestination(request.params[0].get_str());
+
+            // Make sure the destination is valid
+            if (!IsValidDestination(dest)) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
+            }
+
+            if (!pwallet->DisplayAddress(dest)) {
+                throw JSONRPCError(RPC_MISC_ERROR, "Failed to display address");
+            }
+
+            UniValue result(UniValue::VOBJ);
+            result.pushKV("address", request.params[0].get_str());
+            return result;
+        }
+    };
+}
+#endif // ENABLE_EXTERNAL_SIGNER
+
 RPCHelpMan abortrescan();
 RPCHelpMan dumpprivkey();
 RPCHelpMan importprivkey();
@@ -4629,7 +4684,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "abortrescan",                      &abortrescan,                   {} },
     { "wallet",             "addmultisigaddress",               &addmultisigaddress,            {"nrequired","keys","label"} },
     { "wallet",             "backupwallet",                     &backupwallet,                  {"destination"} },
-    { "wallet",             "createwallet",                     &createwallet,                  {"wallet_name", "disable_private_keys", "blank", "passphrase", "avoid_reuse", "descriptors", "load_on_startup"} },
+    { "wallet",             "createwallet",                     &createwallet,                  {"wallet_name", "disable_private_keys", "blank", "passphrase", "avoid_reuse", "descriptors", "load_on_startup", "external_signer"} },
     { "wallet",             "dumphdinfo",                       &dumphdinfo,                    {} },
     { "wallet",             "dumpprivkey",                      &dumpprivkey,                   {"address"}  },
     { "wallet",             "dumpwallet",                       &dumpwallet,                    {"filename"} },
@@ -4689,6 +4744,9 @@ static const CRPCCommand commands[] =
     { "wallet",             "walletpassphrase",                 &walletpassphrase,              {"passphrase","timeout","mixingonly"} },
     { "wallet",             "walletprocesspsbt",                &walletprocesspsbt,             {"psbt","sign","sighashtype","bip32derivs"} },
     { "wallet",             "walletcreatefundedpsbt",           &walletcreatefundedpsbt,        {"inputs","outputs","locktime","options","bip32derivs"} },
+#ifdef ENABLE_EXTERNAL_SIGNER
+    { "wallet",             "walletdisplayaddress",             &walletdisplayaddress,          {"address"}},
+#endif // ENABLE_EXTERNAL_SIGNER
     { "wallet",             "wipewallettxes",                   &wipewallettxes,                {"keep_confirmed"} },
 };
 // clang-format on

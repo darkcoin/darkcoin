@@ -72,6 +72,7 @@ public:
         Prune,                // bool
         PruneSize,            // int
         DatabaseCache,        // int
+        ExternalSignerPath,   // QString
         SpendZeroConfChange,  // bool
         ShowMasternodesTab,   // bool
         ShowGovernanceTab,    // bool

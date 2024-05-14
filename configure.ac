@@ -329,10 +329,10 @@ AC_ARG_ENABLE([werror],
     [enable_werror=$enableval],
     [enable_werror=no])
 
-AC_ARG_WITH([boost-process],
-    [AS_HELP_STRING([--with-boost-process],[Opt in to using Boost Process (default is no)])],
-    [boost_process=$withval],
-    [boost_process=no])
+AC_ARG_ENABLE([external-signer],
+    [AS_HELP_STRING([--enable-external-signer],[compile external signer support (default is auto, requires Boost::Process)])],
+    [use_external_signer=$enableval],
+    [use_external_signer=yes])
 
 AC_LANG_PUSH([C++])
 
@@ -942,7 +942,7 @@ if test x$use_hardening != xno; then
 
   dnl -fcf-protection used with Clang 7 causes ld to emit warnings:
   dnl ld: error: ... <corrupt x86 feature size: 0x8>
-  dnl Use CHECK_LINK_FLAG & --fatal-warnings to ensure we wont use the flag in this case.
+  dnl Use CHECK_LINK_FLAG & --fatal-warnings to ensure we won't use the flag in this case.
   AX_CHECK_LINK_FLAG([-fcf-protection=full],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -fcf-protection=full"],, [[$LDFLAG_WERROR]])
 
   case $host in
@@ -1321,6 +1321,7 @@ if test "x$enable_fuzz" = "xyes"; then
   bitcoin_enable_qt_dbus=no
   enable_wallet=no
   use_bench=no
+  use_external_signer=no
   use_upnp=no
   use_natpmp=no
   use_zmq=no
@@ -1447,47 +1448,51 @@ if test "x$use_natpmp" != xno; then
 fi
 
 if test x$build_bitcoin_wallet$build_bitcoin_cli$build_bitcoin_tx$build_bitcoind$bitcoin_enable_qt$use_tests$use_bench = xnonononononono; then
-    use_boost=no
+  use_boost=no
 else
-    use_boost=yes
+  use_boost=yes
 fi
 
 if test x$use_boost = xyes; then
 
-dnl Check for Boost headers
-AX_BOOST_BASE([1.64.0],[],[AC_MSG_ERROR([Boost is not available!])])
-if test x$want_boost = xno; then
-    AC_MSG_ERROR([[only libdashconsensus can be built without boost]])
-fi
-AX_BOOST_FILESYSTEM
+  dnl Check for Boost headers
+  AX_BOOST_BASE([1.64.0],[],[AC_MSG_ERROR([Boost is not available!])])
+  if test x$want_boost = xno; then
+      AC_MSG_ERROR([[only libdashconsensus can be built without boost]])
+  fi
+  AX_BOOST_FILESYSTEM
 
-dnl Opt-in to Boost Process
-if test "x$boost_process" != xno; then
-AC_MSG_CHECKING(for Boost Process)
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <boost/process.hpp>]],
- [[ boost::process::child* child = new boost::process::child; delete child; ]])],
- [ AC_MSG_RESULT(yes); AC_DEFINE([HAVE_BOOST_PROCESS],,[define if Boost::Process is available])],
- [ AC_MSG_ERROR([Boost::Process is not available!])]
-)
-fi
+  dnl Opt-in to Boost Process if external signer support is requested
+  if test "x$use_external_signer" != xno; then
+    AC_MSG_CHECKING(for Boost Process)
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <boost/process.hpp>]],
+     [[ boost::process::child* child = new boost::process::child; delete child; ]])],
+     [ AC_MSG_RESULT(yes)
+     AC_DEFINE([ENABLE_EXTERNAL_SIGNER],,[define if external signer support is enabled])
+     ],
+     [ AC_MSG_ERROR([Boost::Process is required for external signer support, but not available!])]
+    )
+  fi
 
-if test x$suppress_external_warnings != xno; then
+  if test x$suppress_external_warnings != xno; then
     dnl Prevent use of std::unary_function, which was removed in C++17,
     dnl and will generate warnings with newer compilers.
     dnl See: https://github.com/boostorg/container_hash/issues/22.
     BOOST_CPPFLAGS="$BOOST_CPPFLAGS -DBOOST_NO_CXX98_FUNCTION_BASE"
 
     BOOST_CPPFLAGS=SUPPRESS_WARNINGS($BOOST_CPPFLAGS)
+  fi
+
+  BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB"
 fi
 
-BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB"
-fi
+AM_CONDITIONAL([ENABLE_EXTERNAL_SIGNER], [test "x$use_external_signer" = "xyes"])
 
 dnl Check for reduced exports
 if test x$use_reduce_exports = xyes; then
-    AX_CHECK_COMPILE_FLAG([-fvisibility=hidden],[CXXFLAGS="$CXXFLAGS -fvisibility=hidden"],
-    [AC_MSG_ERROR([Cannot set hidden symbol visibility. Use --disable-reduce-exports.])],[[$CXXFLAG_WERROR]])
-    AX_CHECK_LINK_FLAG([[-Wl,--exclude-libs,ALL]],[RELDFLAGS="-Wl,--exclude-libs,ALL"],,[[$LDFLAG_WERROR]])
+  AX_CHECK_COMPILE_FLAG([-fvisibility=hidden],[CXXFLAGS="$CXXFLAGS -fvisibility=hidden"],
+  [AC_MSG_ERROR([Cannot set hidden symbol visibility. Use --disable-reduce-exports.])],[[$CXXFLAG_WERROR]])
+  AX_CHECK_LINK_FLAG([[-Wl,--exclude-libs,ALL]],[RELDFLAGS="-Wl,--exclude-libs,ALL"],,[[$LDFLAG_WERROR]])
 fi
 
 if test x$use_tests = xyes; then
@@ -1498,25 +1503,25 @@ if test x$use_tests = xyes; then
 
   if test x$use_boost = xyes; then
 
-  AX_BOOST_UNIT_TEST_FRAMEWORK
+    AX_BOOST_UNIT_TEST_FRAMEWORK
 
-  dnl Determine if -DBOOST_TEST_DYN_LINK is needed
-  AC_MSG_CHECKING([for dynamic linked boost test])
-  TEMP_LIBS="$LIBS"
-  LIBS="$LIBS $BOOST_LDFLAGS $BOOST_UNIT_TEST_FRAMEWORK_LIB"
-  TEMP_CPPFLAGS="$CPPFLAGS"
-  CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
-  AC_LINK_IFELSE([AC_LANG_SOURCE([
-       #define BOOST_TEST_DYN_LINK
-       #define BOOST_TEST_MAIN
-        #include <boost/test/unit_test.hpp>
+    dnl Determine if -DBOOST_TEST_DYN_LINK is needed
+    AC_MSG_CHECKING([for dynamic linked boost test])
+    TEMP_LIBS="$LIBS"
+    LIBS="$LIBS $BOOST_LDFLAGS $BOOST_UNIT_TEST_FRAMEWORK_LIB"
+    TEMP_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
+    AC_LINK_IFELSE([AC_LANG_SOURCE([
+         #define BOOST_TEST_DYN_LINK
+         #define BOOST_TEST_MAIN
+          #include <boost/test/unit_test.hpp>
 
-       ])],
-    [AC_MSG_RESULT(yes)]
-    [TESTDEFS="$TESTDEFS -DBOOST_TEST_DYN_LINK"],
-    [AC_MSG_RESULT(no)])
-  LIBS="$TEMP_LIBS"
-  CPPFLAGS="$TEMP_CPPFLAGS"
+         ])],
+      [AC_MSG_RESULT(yes)]
+      [TESTDEFS="$TESTDEFS -DBOOST_TEST_DYN_LINK"],
+      [AC_MSG_RESULT(no)])
+    LIBS="$TEMP_LIBS"
+    CPPFLAGS="$TEMP_CPPFLAGS"
 
   fi
 fi
@@ -1879,6 +1884,7 @@ AC_SUBST(ARM_SHANI_CXXFLAGS)
 AC_SUBST(LIBTOOL_APP_LDFLAGS)
 AC_SUBST(USE_SQLITE)
 AC_SUBST(USE_BDB)
+AC_SUBST(ENABLE_EXTERNAL_SIGNER)
 AC_SUBST(USE_UPNP)
 AC_SUBST(USE_QRCODE)
 AC_SUBST(BOOST_LIBS)
@@ -1947,46 +1953,46 @@ esac
 
 echo
 echo "Options used to compile and link:"
-echo "  boost process = $with_boost_process"
-echo "  multiprocess  = $build_multiprocess"
-echo "  with libs     = $build_bitcoin_libs"
-echo "  with wallet         = $enable_wallet"
-echo "  with gui / qt       = $bitcoin_enable_qt"
+echo "  external signer = $use_external_signer"
+echo "  multiprocess    = $build_multiprocess"
+echo "  with libs       = $build_bitcoin_libs"
+echo "  with wallet     = $enable_wallet"
 if test "x$enable_wallet" != "xno"; then
-    echo "  with sqlite         = $use_sqlite"
-    echo "  with bdb            = $use_bdb"
+    echo "    with sqlite   = $use_sqlite"
+    echo "    with bdb      = $use_bdb"
 fi
+echo "  with gui / qt   = $bitcoin_enable_qt"
 if test x$bitcoin_enable_qt != xno; then
-    echo "    with qr           = $use_qr"
+    echo "    with qr       = $use_qr"
 fi
-echo "  with zmq            = $use_zmq"
+echo "  with zmq        = $use_zmq"
 if test x$enable_fuzz == xno; then
-    echo "  with test           = $use_tests"
+    echo "  with test       = $use_tests"
 else
-    echo "  with test           = not building test_dash because fuzzing is enabled"
+    echo "  with test       = not building test_dash because fuzzing is enabled"
 fi
-echo "  with fuzz binary    = $enable_fuzz_binary"
-echo "  with bench          = $use_bench"
-echo "  with upnp           = $use_upnp"
-echo "  with natpmp         = $use_natpmp"
-echo "  use asm             = $use_asm"
-echo "  ebpf tracing        = $have_sdt"
-echo "  sanitizers          = $use_sanitizers"
-echo "  debug enabled       = $enable_debug"
-echo "  stacktraces enabled = $enable_stacktraces"
-echo "  crash hooks enabled = $enable_crashhooks"
-echo "  miner enabled       = $enable_miner"
-echo "  gprof enabled       = $enable_gprof"
-echo "  werror              = $enable_werror"
+echo "  with fuzz binary= $enable_fuzz_binary"
+echo "  with bench      = $use_bench"
+echo "  with upnp       = $use_upnp"
+echo "  with natpmp     = $use_natpmp"
+echo "  use asm         = $use_asm"
+echo "  ebpf tracing    = $have_sdt"
+echo "  sanitizers      = $use_sanitizers"
+echo "  debug enabled   = $enable_debug"
+echo "  stacktraces     = $enable_stacktraces"
+echo "  crash hooks     = $enable_crashhooks"
+echo "  miner enabled   = $enable_miner"
+echo "  gprof enabled   = $enable_gprof"
+echo "  werror          = $enable_werror"
 echo
-echo "  target os           = $TARGET_OS"
-echo "  build os            = $build_os"
+echo "  target os       = $TARGET_OS"
+echo "  build os        = $build_os"
 echo
-echo "  CC                  = $CC"
-echo "  CFLAGS              = $PTHREAD_CFLAGS $CFLAGS"
-echo "  CPPFLAGS            = $DEBUG_CPPFLAGS $HARDENED_CPPFLAGS $CPPFLAGS"
-echo "  CXX                 = $CXX"
-echo "  CXXFLAGS            = $DEBUG_CXXFLAGS $HARDENED_CXXFLAGS $WARN_CXXFLAGS $NOWARN_CXXFLAGS $ERROR_CXXFLAGS $GPROF_CXXFLAGS $CXXFLAGS"
-echo "  LDFLAGS             = $PTHREAD_LIBS $HARDENED_LDFLAGS $GPROF_LDFLAGS $LDFLAGS"
-echo "  ARFLAGS             = $ARFLAGS"
+echo "  CC              = $CC"
+echo "  CFLAGS          = $PTHREAD_CFLAGS $CFLAGS"
+echo "  CPPFLAGS        = $DEBUG_CPPFLAGS $HARDENED_CPPFLAGS $CPPFLAGS"
+echo "  CXX             = $CXX"
+echo "  CXXFLAGS        = $DEBUG_CXXFLAGS $HARDENED_CXXFLAGS $WARN_CXXFLAGS $NOWARN_CXXFLAGS $ERROR_CXXFLAGS $GPROF_CXXFLAGS $CXXFLAGS"
+echo "  LDFLAGS         = $PTHREAD_LIBS $HARDENED_LDFLAGS $GPROF_LDFLAGS $LDFLAGS"
+echo "  ARFLAGS         = $ARFLAGS"
 echo
