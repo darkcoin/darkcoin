@@ -11,7 +11,7 @@ ENV APT_ARGS="-y --no-install-recommends --no-upgrade"
 # Install packages for i386; disabled on aarch64 and arm64 hosts
 RUN (dpkg --print-architecture | grep -Eq 'aarch64|arm64' || dpkg --add-architecture i386)
 RUN (dpkg --print-architecture | grep -Eq 'aarch64|arm64' || (apt-get update && apt-get install $APT_ARGS \
-    g++-9-multilib \
+    g++-10-multilib \
     wine32) && rm -rf /var/lib/apt/lists/*)
 
 RUN apt-get update && apt-get install $APT_ARGS \
@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install $APT_ARGS \
     ccache \
     clang \
     cmake \
-    g++ \
+    g++-10 \
     gettext \
     git \
     libc++-dev \
@@ -101,7 +101,7 @@ RUN useradd -u ${USER_ID} -g dash -s /bin/bash -m -d /home/dash dash
 RUN apt-get update && apt-get install $APT_ARGS \
     bc \
     gawk \
-    g++-arm-linux-gnueabihf \
+    g++-10-arm-linux-gnueabihf \
     g++-mingw-w64-x86-64 \
     jq \
     libz-dev \
@@ -134,7 +134,15 @@ RUN ln -s x86_64-linux-gnu/asm /usr/include/asm
 RUN \
   update-alternatives --set x86_64-w64-mingw32-gcc  /usr/bin/x86_64-w64-mingw32-gcc-posix; \
   update-alternatives --set x86_64-w64-mingw32-g++  /usr/bin/x86_64-w64-mingw32-g++-posix; \
+  update-alternatives --install /usr/bin/arm-linux-gnueabihf-g++ arm-linux-gnueabihf-g++ /usr/bin/arm-linux-gnueabihf-g++-10 50; \
+  update-alternatives --install /usr/bin/arm-linux-gnueabihf-gcc arm-linux-gnueabihf-gcc /usr/bin/arm-linux-gnueabihf-gcc-10 50; \
   exit 0
+
+# Set g++-10 and gcc-10 as the default versions
+RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100 && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 && \
+    update-alternatives --install /usr/bin/cc cc /usr/bin/gcc 100 && \
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 100
 
 ARG LLVM_VERSION=16
 # Setup Clang+LLVM support

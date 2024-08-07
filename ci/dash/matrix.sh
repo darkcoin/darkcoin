@@ -30,8 +30,6 @@ elif [ "$BUILD_TARGET" = "linux64_ubsan" ]; then
   source ./ci/test/00_setup_env_native_ubsan.sh
 elif [ "$BUILD_TARGET" = "linux64_fuzz" ]; then
   source ./ci/test/00_setup_env_native_fuzz.sh
-elif [ "$BUILD_TARGET" = "linux64_cxx20" ]; then
-  source ./ci/test/00_setup_env_native_cxx20.sh
 elif [ "$BUILD_TARGET" = "linux64_sqlite" ]; then
   source ./ci/test/00_setup_env_native_sqlite.sh
 elif [ "$BUILD_TARGET" = "linux64_nowallet" ]; then
