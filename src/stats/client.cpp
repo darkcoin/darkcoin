@@ -43,22 +43,13 @@ std::unique_ptr<StatsdClient> InitStatsClient(const ArgsManager& args)
         return string;
     };
 
-    auto suffix = args.GetArg("-statssuffix", DEFAULT_STATSD_SUFFIX);
-    if (suffix.empty()) {
-        suffix = args.GetArg("-statshostname", DEFAULT_STATSD_SUFFIX);
-    } else {
-        // We restrict sanitization logic to our newly added arguments to
-        // prevent breaking changes.
-        sanitize_string(suffix);
-    }
-
     return std::make_unique<StatsdClient>(
         args.GetArg("-statshost", DEFAULT_STATSD_HOST),
         args.GetArg("-statsport", DEFAULT_STATSD_PORT),
         args.GetArg("-statsbatchsize", DEFAULT_STATSD_BATCH_SIZE),
         args.GetArg("-statsduration", DEFAULT_STATSD_DURATION),
         sanitize_string(args.GetArg("-statsprefix", DEFAULT_STATSD_PREFIX)),
-        suffix
+        sanitize_string(args.GetArg("-statssuffix", DEFAULT_STATSD_SUFFIX))
     );
 }
 
