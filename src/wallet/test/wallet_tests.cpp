@@ -248,8 +248,8 @@ BOOST_FIXTURE_TEST_CASE(importmulti_rescan, TestChain100Setup)
                       "seconds of key creation, and could contain transactions pertaining to the key. As a result, "
                       "transactions and coins using this key may not appear in the wallet. This error could be caused "
                       "by pruning or data corruption (see dashd log for details) and could be dealt with by "
-                      "downloading and rescanning the relevant blocks (see -reindex and -rescan "
-                      "options).\"}},{\"success\":true}]",
+                      "downloading and rescanning the relevant blocks (see -reindex "
+                      "option).\"}},{\"success\":true}]",
                               0, oldTip->GetBlockTimeMax(), TIMESTAMP_WINDOW));
         RemoveWallet(wallet, std::nullopt);
     }

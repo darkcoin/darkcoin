@@ -38,8 +38,6 @@ void DummyWalletInit::AddWalletOptions(ArgsManager& argsman) const
         "-keypool=<n>",
         "-maxapsfee=<n>",
         "-maxtxfee=<amt>",
-        "-rescan=<mode>",
-        "-salvagewallet",
         "-spendzeroconfchange",
         "-wallet=<path>",
         "-walletbackupsdir=<dir>",
