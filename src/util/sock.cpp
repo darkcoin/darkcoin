@@ -19,6 +19,14 @@
 #include <locale>
 #endif
 
+#ifdef USE_EPOLL
+#include <sys/epoll.h>
+#endif
+
+#ifdef USE_KQUEUE
+#include <sys/event.h>
+#endif
+
 #ifdef USE_POLL
 #include <poll.h>
 #endif
@@ -30,12 +38,32 @@ static inline bool IOErrorIsPermanent(int err)
 
 Sock::Sock() : m_socket(INVALID_SOCKET) {}
 
-Sock::Sock(SOCKET s) : m_socket(s) {}
+Sock::Sock(SOCKET s, SocketEventsMode event_mode, std::optional<int> fd_mode)
+    : m_socket(s),
+      m_event_mode(event_mode),
+      m_fd_mode(fd_mode)
+{
+    // Do not allow for the *possibility* of intentionally setting up a valid socket
+    // with an unknown event mode.
+    if (s != INVALID_SOCKET) {
+        assert(m_event_mode != SocketEventsMode::Unknown);
+    }
+
+    // If we are using {epoll, kqueue} socket event modes, there must exist a file
+    // descriptor for manipulating the socket with the {epoll, kqueue} instance
+    if (m_event_mode == SocketEventsMode::EPoll || m_event_mode == SocketEventsMode::KQueue) {
+        assert(m_fd_mode != std::nullopt && m_fd_mode != INVALID_SOCKET);
+    }
+}
 
 Sock::Sock(Sock&& other)
 {
     m_socket = other.m_socket;
+    m_event_mode = other.m_event_mode;
+    m_fd_mode = other.m_fd_mode;
     other.m_socket = INVALID_SOCKET;
+    other.m_event_mode = SocketEventsMode::Unknown;
+    other.m_fd_mode = std::nullopt;
 }
 
 Sock::~Sock() { Reset(); }
@@ -44,7 +72,11 @@ Sock& Sock::operator=(Sock&& other)
 {
     Reset();
     m_socket = other.m_socket;
+    m_event_mode = other.m_event_mode;
+    m_fd_mode = other.m_fd_mode;
     other.m_socket = INVALID_SOCKET;
+    other.m_event_mode = SocketEventsMode::Unknown;
+    other.m_fd_mode = std::nullopt;
     return *this;
 }
 
@@ -54,6 +86,8 @@ SOCKET Sock::Release()
 {
     const SOCKET s = m_socket;
     m_socket = INVALID_SOCKET;
+    m_event_mode = SocketEventsMode::Unknown;
+    m_fd_mode = std::nullopt;
     return s;
 }
 
@@ -97,7 +131,7 @@ std::unique_ptr<Sock> Sock::Accept(sockaddr* addr, socklen_t* addr_len) const
     const auto socket = accept(m_socket, addr, addr_len);
     if (socket != ERR) {
         try {
-            sock = std::make_unique<Sock>(socket);
+            sock = std::make_unique<Sock>(socket, m_event_mode, m_fd_mode);
         } catch (const std::exception&) {
 #ifdef WIN32
             closesocket(socket);
@@ -127,68 +161,240 @@ int Sock::GetSockName(sockaddr* name, socklen_t* name_len) const
 
 bool Sock::Wait(std::chrono::milliseconds timeout, Event requested, Event* occurred) const
 {
+    EventsPerSock events_per_sock{std::make_pair(m_socket, Events{requested})};
+
+    /* We need to specify that we only want level-triggered modes used because we are expecting
+       a direct correlation between the events reported and the one socket we are querying */
+    if (!IWaitMany(m_event_mode, m_fd_mode, m_wrap_func, timeout, events_per_sock, /* lt_only = */ true)) {
+        return false;
+    }
+
+    if (occurred != nullptr) {
+        *occurred = events_per_sock.begin()->second.occurred;
+    }
+
+    return true;
+}
+
+bool Sock::WaitMany(std::chrono::milliseconds timeout, EventsPerSock& events_per_sock) const
+{
+    return IWaitMany(m_event_mode, m_fd_mode, m_wrap_func, timeout, events_per_sock);
+}
+
+bool Sock::IWaitMany(SocketEventsMode event_mode, std::optional<int> fd_mode, wrap_fn wrap_func,
+                     std::chrono::milliseconds timeout, EventsPerSock& events_per_sock, bool lt_only)
+{
+    switch (event_mode)
+    {
 #ifdef USE_POLL
-    pollfd fd;
-    fd.fd = m_socket;
-    fd.events = 0;
-    if (requested & RECV) {
-        fd.events |= POLLIN;
-    }
-    if (requested & SEND) {
-        fd.events |= POLLOUT;
-    }
-
-    if (poll(&fd, 1, count_milliseconds(timeout)) == SOCKET_ERROR) {
-        return false;
-    }
-
-    if (occurred != nullptr) {
-        *occurred = 0;
-        if (fd.revents & POLLIN) {
-            *occurred |= RECV;
-        }
-        if (fd.revents & POLLOUT) {
-            *occurred |= SEND;
-        }
-    }
-
-    return true;
-#else
-    if (!IsSelectableSocket(m_socket)) {
-        return false;
-    }
-
-    fd_set fdset_recv;
-    fd_set fdset_send;
-    FD_ZERO(&fdset_recv);
-    FD_ZERO(&fdset_send);
-
-    if (requested & RECV) {
-        FD_SET(m_socket, &fdset_recv);
-    }
-
-    if (requested & SEND) {
-        FD_SET(m_socket, &fdset_send);
-    }
-
-    timeval timeout_struct = MillisToTimeval(timeout);
-
-    if (select(m_socket + 1, &fdset_recv, &fdset_send, nullptr, &timeout_struct) == SOCKET_ERROR) {
-        return false;
-    }
-
-    if (occurred != nullptr) {
-        *occurred = 0;
-        if (FD_ISSET(m_socket, &fdset_recv)) {
-            *occurred |= RECV;
-        }
-        if (FD_ISSET(m_socket, &fdset_send)) {
-            *occurred |= SEND;
-        }
-    }
-
-    return true;
+        case SocketEventsMode::Poll:
+            return WaitManyPoll(wrap_func, timeout, events_per_sock);
 #endif /* USE_POLL */
+        case SocketEventsMode::Select:
+            return WaitManySelect(wrap_func, timeout, events_per_sock);
+#ifdef USE_EPOLL
+        case SocketEventsMode::EPoll:
+            /* If we explictly need to use a level triggered mode, skip below to fallback */
+            if (lt_only) break;
+            assert(fd_mode);
+            return WaitManyEPoll(fd_mode.value(), wrap_func, timeout, events_per_sock);
+#endif /* USE_EPOLL */
+#ifdef USE_KQUEUE
+        case SocketEventsMode::KQueue:
+            /* If we explictly need to use a level triggered mode, skip below to fallback */
+            if (lt_only) break;
+            assert(fd_mode);
+            return WaitManyKQueue(fd_mode.value(), wrap_func, timeout, events_per_sock);
+#endif /* USE_KQUEUE */
+        default:
+            assert(false);
+    }
+    /* We should only be here if we need a level-triggered mode but the instance is edge-triggered instead */
+    assert(lt_only);
+#ifdef USE_POLL
+    return WaitManyPoll(wrap_func, timeout, events_per_sock);
+#else
+    return WaitManySelect(wrap_func, timeout, events_per_sock);
+#endif /* USE_POLL */
+}
+
+#ifdef USE_EPOLL
+bool Sock::WaitManyEPoll(int fd_mode, wrap_fn wrap_func,
+                         std::chrono::milliseconds timeout, EventsPerSock& events_per_sock)
+{
+    std::array<epoll_event, MAX_EVENTS> events;
+
+    int ret{SOCKET_ERROR};
+    wrap_func([&](){
+        ret = epoll_wait(fd_mode, events.data(), events.size(), count_milliseconds(timeout));
+    });
+    if (ret == SOCKET_ERROR) {
+        return false;
+    }
+
+    /* Events reported do not correspond to sockets requested in edge-triggered modes, we will clear the
+       entire map before populating it with our events data. */
+    events_per_sock.clear();
+
+    for (int idx = 0; idx < ret; idx++) {
+        auto& ev = events[idx];
+        Event occurred = 0;
+        if (ev.events & (EPOLLERR | EPOLLHUP)) {
+            occurred |= ERR;
+        } else {
+            if (ev.events & EPOLLIN) {
+                occurred |= RECV;
+            }
+            if (ev.events & EPOLLOUT) {
+                occurred |= SEND;
+            }
+        }
+        events_per_sock.emplace(static_cast<SOCKET>(ev.data.fd), Sock::Events{occurred, occurred});
+    }
+
+    return true;
+}
+#endif /* USE_EPOLL */
+
+#ifdef USE_KQUEUE
+bool Sock::WaitManyKQueue(int fd_mode, wrap_fn wrap_func,
+                          std::chrono::milliseconds timeout, EventsPerSock& events_per_sock)
+{
+    std::array<struct kevent, MAX_EVENTS> events;
+    struct timespec ts = MillisToTimespec(timeout);
+
+    int ret{SOCKET_ERROR};
+    wrap_func([&](){
+        ret = kevent(fd_mode, nullptr, 0, events.data(), events.size(), &ts);
+    });
+    if (ret == SOCKET_ERROR) {
+        return false;
+    }
+
+    /* Events reported do not correspond to sockets requested in edge-triggered modes, we will clear the
+       entire map before populating it with our events data. */
+    events_per_sock.clear();
+
+    for (int idx = 0; idx < ret; idx++) {
+        auto& ev = events[idx];
+        Event occurred = 0;
+        if (ev.flags & (EV_ERROR | EV_EOF)) {
+            occurred |= ERR;
+        } else {
+            if (ev.filter == EVFILT_READ) {
+                occurred |= RECV;
+            }
+            if (ev.filter == EVFILT_WRITE) {
+                occurred |= SEND;
+            }
+        }
+        events_per_sock.emplace(static_cast<SOCKET>(ev.ident), Sock::Events{occurred, occurred});
+    }
+
+    return true;
+}
+#endif /* USE_KQUEUE */
+
+#ifdef USE_POLL
+bool Sock::WaitManyPoll(wrap_fn wrap_func, std::chrono::milliseconds timeout, EventsPerSock& events_per_sock)
+{
+    std::vector<pollfd> pfds;
+    for (const auto& [socket, events] : events_per_sock) {
+        pfds.emplace_back();
+        auto& pfd = pfds.back();
+        pfd.fd = socket;
+        if (events.requested & RECV) {
+            pfd.events |= POLLIN;
+        }
+        if (events.requested & SEND) {
+            pfd.events |= POLLOUT;
+        }
+    }
+
+    int ret{SOCKET_ERROR};
+    wrap_func([&](){
+        ret = poll(pfds.data(), pfds.size(), count_milliseconds(timeout));
+    });
+    if (ret == SOCKET_ERROR) {
+        return false;
+    }
+
+    assert(pfds.size() == events_per_sock.size());
+    size_t i{0};
+    for (auto& [socket, events] : events_per_sock) {
+        assert(socket == static_cast<SOCKET>(pfds[i].fd));
+        events.occurred = 0;
+        if (pfds[i].revents & POLLIN) {
+            events.occurred |= RECV;
+        }
+        if (pfds[i].revents & POLLOUT) {
+            events.occurred |= SEND;
+        }
+        if (pfds[i].revents & (POLLERR | POLLHUP)) {
+            events.occurred |= ERR;
+        }
+        ++i;
+    }
+
+    return true;
+}
+#endif /* USE_POLL */
+
+bool Sock::WaitManySelect(wrap_fn wrap_func, std::chrono::milliseconds timeout, EventsPerSock& events_per_sock)
+{
+    fd_set recv;
+    fd_set send;
+    fd_set err;
+    FD_ZERO(&recv);
+    FD_ZERO(&send);
+    FD_ZERO(&err);
+    SOCKET socket_max{0};
+
+    for (const auto& [sock, events] : events_per_sock) {
+        const auto& s = sock;
+        if (!IsSelectableSocket(s)) {
+            return false;
+        }
+        if (events.requested & RECV) {
+            FD_SET(s, &recv);
+        }
+        if (events.requested & SEND) {
+            FD_SET(s, &send);
+        }
+        FD_SET(s, &err);
+        socket_max = std::max(socket_max, s);
+    }
+
+    timeval tv = MillisToTimeval(timeout);
+
+    int ret{SOCKET_ERROR};
+    wrap_func([&](){
+        ret = select(socket_max + 1, &recv, &send, &err, &tv);
+    });
+    if (ret == SOCKET_ERROR) {
+        return false;
+    }
+
+    for (auto& [sock, events] : events_per_sock) {
+        const auto& s = sock;
+        events.occurred = 0;
+        if (FD_ISSET(s, &recv)) {
+            events.occurred |= RECV;
+        }
+        if (FD_ISSET(s, &send)) {
+            events.occurred |= SEND;
+        }
+        if (FD_ISSET(s, &err)) {
+            events.occurred |= ERR;
+        }
+    }
+
+    return true;
+}
+
+void Sock::SetWrapFn(wrap_fn wrap_func)
+{
+    m_wrap_func = wrap_func;
 }
 
 void Sock::SendComplete(const std::string& data,

@@ -10,14 +10,28 @@
 #include <util/time.h>
 
 #include <chrono>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
+
+#if defined(USE_EPOLL)
+#define DEFAULT_SOCKETEVENTS "epoll"
+#elif defined(USE_KQUEUE)
+#define DEFAULT_SOCKETEVENTS "kqueue"
+#elif defined(USE_POLL)
+#define DEFAULT_SOCKETEVENTS "poll"
+#else
+#define DEFAULT_SOCKETEVENTS "select"
+#endif
 
 /**
  * Maximum time to wait for I/O readiness.
  * It will take up until this time to break off in case of an interruption.
  */
 static constexpr auto MAX_WAIT_FOR_IO = 1s;
+static constexpr size_t MAX_EVENTS = 64;
 
 enum class SocketEventsMode : int8_t {
     Select = 0,
@@ -67,6 +81,8 @@ static SocketEventsMode SEMFromString(const std::string str)
     else { return SocketEventsMode::Unknown; }
 }
 
+using wrap_fn = std::function<void(std::function<void()>&&)>;
+
 /**
  * RAII helper class that manages a socket. Mimics `std::unique_ptr`, but instead of a pointer it
  * contains a socket and closes it automatically when it goes out of scope.
@@ -82,7 +98,7 @@ public:
     /**
      * Take ownership of an existent socket.
      */
-    explicit Sock(SOCKET s);
+    explicit Sock(SOCKET s, SocketEventsMode event_mode = SocketEventsMode::Select, std::optional<int> fd_mode = std::nullopt);
 
     /**
      * Copy constructor, disabled because closing the same socket twice is undesirable.
@@ -197,25 +213,98 @@ public:
     /**
      * If passed to `Wait()`, then it will wait for readiness to read from the socket.
      */
-    static constexpr Event RECV = 0b01;
+    static constexpr Event RECV = 0b001;
 
     /**
      * If passed to `Wait()`, then it will wait for readiness to send to the socket.
      */
-    static constexpr Event SEND = 0b10;
+    static constexpr Event SEND = 0b010;
+
+    /**
+     * Ignored if passed to `Wait()`, but could be set in the occurred events if an
+     * exceptional condition has occurred on the socket or if it has been disconnected.
+     */
+    static constexpr Event ERR = 0b100;
 
     /**
      * Wait for readiness for input (recv) or output (send).
      * @param[in] timeout Wait this much for at least one of the requested events to occur.
      * @param[in] requested Wait for those events, bitwise-or of `RECV` and `SEND`.
-     * @param[out] occurred If not nullptr and `true` is returned, then upon return this
-     * indicates which of the requested events occurred. A timeout is indicated by return
-     * value of `true` and `occurred` being set to 0.
-     * @return true on success and false otherwise
+     * @param[out] occurred If not nullptr and the function returns `true`, then this
+     * indicates which of the requested events occurred (`ERR` will be added, even if
+     * not requested, if an exceptional event occurs on the socket).
+     * A timeout is indicated by return value of `true` and `occurred` being set to 0.
+     * @return true on success (or timeout, if `occurred` of 0 is returned), false otherwise
      */
     [[nodiscard]] virtual bool Wait(std::chrono::milliseconds timeout,
                                     Event requested,
                                     Event* occurred = nullptr) const;
+    /**
+     * Auxiliary requested/occurred events to wait for in `WaitMany()`.
+     */
+    struct Events {
+        explicit Events(Event req, Event ocr = 0) : requested{req}, occurred{ocr} {}
+        Event requested;
+        Event occurred;
+    };
+
+    /**
+     * On which socket to wait for what events in `WaitMany()`.
+     *
+     * Bitcoin:
+     * The `shared_ptr` is copied into the map to ensure that the `Sock` object
+     * is not destroyed (its destructor would close the underlying socket).
+     * If this happens shortly before or after we call `poll(2)` and a new
+     * socket gets created under the same file descriptor number then the report
+     * from `WaitMany()` will be bogus.
+     *
+     * Dash:
+     * The raw `SOCKET` file descriptor is copied into the map (generally taken from
+     * Sock::Get()) to allow sockets managed by external logic (e.g. WakeupPipes) to
+     * be used without wrapping it into a Sock object and risk handing control over.
+     */
+    using EventsPerSock = std::unordered_map<SOCKET, Events>;
+
+    /**
+     * Same as `Wait()`, but wait on many sockets within the same timeout.
+     * @param[in] timeout Wait this long for at least one of the requested events to occur.
+     * @param[in,out] events_per_sock Wait for the requested events on these sockets and set
+     * `occurred` for the events that actually occurred.
+     * @return true on success (or timeout, if all `what[].occurred` are returned as 0),
+     * false otherwise
+     */
+    [[nodiscard]] virtual bool WaitMany(std::chrono::milliseconds timeout,
+                                        EventsPerSock& events_per_sock) const;
+
+    /**
+     * As an EventsPerSock map no longer contains a Sock object (it now contains the raw SOCKET file
+     * descriptor), we lose access to all the logic implemented in Sock. Except that as WaitMany
+     * doesn't interact with the raw socket stored within Sock, it can be safely declared as static
+     * and we can pass all other parameters as arguments as it should ordinarily remain the same for
+     * entire runtime duration of the program.
+     *
+     * This doesn't apply to Sock::Wait(), as it populates an EventsPerSock map with its own raw
+     * socket before passing it to WaitMany.
+     */
+    static bool IWaitMany(SocketEventsMode event_mode, std::optional<int> fd_mode, wrap_fn wrap_func,
+                          std::chrono::milliseconds timeout, EventsPerSock& events_per_sock, bool lt_only = false);
+#ifdef USE_EPOLL
+    static bool WaitManyEPoll(int fd_mode, wrap_fn wrap_func,
+                              std::chrono::milliseconds timeout, EventsPerSock& events_per_sock);
+#endif /* USE_EPOLL */
+#ifdef USE_KQUEUE
+    static bool WaitManyKQueue(int fd_mode, wrap_fn wrap_func,
+                               std::chrono::milliseconds timeout, EventsPerSock& events_per_sock);
+#endif /* USE_KQUEUE */
+#ifdef USE_POLL
+    static bool WaitManyPoll(wrap_fn wrap_func,
+                             std::chrono::milliseconds timeout, EventsPerSock& events_per_sock);
+#endif /* USE_POLL */
+    static bool WaitManySelect(wrap_fn wrap_func,
+                               std::chrono::milliseconds timeout, EventsPerSock& events_per_sock);
+
+    /* Set function wrapped around WaitMany()'s API call */
+    void SetWrapFn(wrap_fn wrap_func);
 
     /* Higher level, convenience, methods. These may throw. */
 
@@ -260,6 +349,12 @@ protected:
      * Contained socket. `INVALID_SOCKET` designates the object is empty.
      */
     SOCKET m_socket;
+    /* Flag for storing socket event mode */
+    SocketEventsMode m_event_mode{SocketEventsMode::Unknown};
+    /* Optional containing file descriptor for applicable event modes */
+    std::optional<int> m_fd_mode{std::nullopt};
+    /* Function that wraps itself around WakeMany()'s API call */
+    wrap_fn m_wrap_func{[](std::function<void()>&& func){func();}};
 };
 
 /** Return readable error string for a network error code */

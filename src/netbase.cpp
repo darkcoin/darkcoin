@@ -456,7 +456,7 @@ bool Socks5(const std::string& strDest, uint16_t port, const ProxyCredentials* a
     return true;
 }
 
-std::unique_ptr<Sock> CreateSockTCP(const CService& address_family)
+std::unique_ptr<Sock> CreateSockTCP(const CService& address_family, SocketEventsMode event_mode, std::optional<int> fd_mode)
 {
     // Create a sockaddr from the specified service.
     struct sockaddr_storage sockaddr;
@@ -472,7 +472,7 @@ std::unique_ptr<Sock> CreateSockTCP(const CService& address_family)
         return nullptr;
     }
 
-    auto sock = std::make_unique<Sock>(hSocket);
+    auto sock = std::make_unique<Sock>(hSocket, event_mode, fd_mode);
 
     // Ensure that waiting for I/O on this socket won't result in undefined
     // behavior.
@@ -505,7 +505,7 @@ std::unique_ptr<Sock> CreateSockTCP(const CService& address_family)
     return sock;
 }
 
-std::function<std::unique_ptr<Sock>(const CService&)> CreateSock = CreateSockTCP;
+std::function<std::unique_ptr<Sock>(const CService&, SocketEventsMode, std::optional<int>)> CreateSock = CreateSockTCP;
 
 template<typename... Args>
 static void LogConnectFailure(bool manual_connection, const char* fmt, const Args&... args) {

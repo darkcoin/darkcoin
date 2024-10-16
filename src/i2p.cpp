@@ -162,8 +162,8 @@ bool Session::Accept(Connection& conn)
                 throw std::runtime_error("wait on socket failed");
             }
 
-            if ((occurred & Sock::RECV) == 0) {
-                // Timeout, no incoming connections within MAX_WAIT_FOR_IO.
+            if (occurred == 0) {
+                // Timeout, no incoming connections or errors within MAX_WAIT_FOR_IO.
                 continue;
             }
 
@@ -295,7 +295,7 @@ Session::Reply Session::SendRequestAndGetReply(const Sock& sock,
 
 std::unique_ptr<Sock> Session::Hello() const
 {
-    auto sock = CreateSock(m_control_host);
+    auto sock = CreateSock(m_control_host, SocketEventsMode::Select, /* fd_mode = */ std::nullopt);
 
     if (!sock) {
         throw std::runtime_error("Cannot create socket");

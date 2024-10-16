@@ -184,14 +184,17 @@ bool LookupSubNet(const std::string& subnet_str, CSubNet& subnet_out);
 /**
  * Create a TCP socket in the given address family.
  * @param[in] address_family The socket is created in the same address family as this address.
+ * @param[in] event_mode The socket enables additional behaviour based on the set event mode.
+ * @param[in] fd_mode Optional file descriptor for managing instances for applicable event modes.
+ *                    They are optional for all modes except epoll and kqueue.
  * @return pointer to the created Sock object or unique_ptr that owns nothing in case of failure
  */
-std::unique_ptr<Sock> CreateSockTCP(const CService& address_family);
+std::unique_ptr<Sock> CreateSockTCP(const CService& address_family, SocketEventsMode event_mode, std::optional<int> fd_mode);
 
 /**
  * Socket factory. Defaults to `CreateSockTCP()`, but can be overridden by unit tests.
  */
-extern std::function<std::unique_ptr<Sock>(const CService&)> CreateSock;
+extern std::function<std::unique_ptr<Sock>(const CService&, SocketEventsMode, std::optional<int>)> CreateSock;
 
 /**
  * Try to connect to the specified service on the specified socket.

@@ -155,7 +155,7 @@ void CActiveMasternodeManager::InitInternal(const CBlockIndex* pindex)
 
     // Check socket connectivity
     LogPrintf("CActiveMasternodeManager::Init -- Checking inbound connection to '%s'\n", m_info.service.ToStringAddrPort());
-    std::unique_ptr<Sock> sock = CreateSock(m_info.service);
+    std::unique_ptr<Sock> sock = CreateSock(m_info.service, SocketEventsMode::Select, /* fd_mode = */ std::nullopt);
     if (!sock) {
         m_state = MASTERNODE_ERROR;
         m_error = "Could not create socket to connect to " + m_info.service.ToStringAddrPort();
