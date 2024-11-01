@@ -27,8 +27,8 @@
 #include <stacktraces.h>
 #include <util/url.h>
 
+#include <cstdio>
 #include <functional>
-#include <stdio.h>
 
 const std::function<std::string(const char*)> G_TRANSLATION_FUN = nullptr;
 UrlDecodeFn* const URL_DECODE = urlDecode;
