@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install $APT_ARGS \
 # Install Clang+LLVM and set it as default
 # We don't need all packages but the default set doesn't include some
 # packages we want so we will need to install some of them manually.
-ARG LLVM_VERSION=16
+ARG LLVM_VERSION=18
 RUN set -ex; \
     echo "Installing LLVM and Clang ${LLVM_VERSION}..."; \
     cd /tmp && \

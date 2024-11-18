@@ -14,7 +14,7 @@
       {
         "depends_name": "x86_64-pc-linux-gnu_multiprocess",
         "host": "x86_64-pc-linux-gnu",
-        "dep_opts": "DEBUG=1 MULTIPROCESS=1 CC=clang-16 CXX=clang++-16"
+        "dep_opts": "DEBUG=1 MULTIPROCESS=1 CC=clang-18 CXX=clang++-18"
       },
       {
         "depends_name": "x86_64-pc-linux-gnu_nowallet",
