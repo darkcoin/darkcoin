@@ -10,6 +10,16 @@
         "depends_name": "x86_64-pc-linux-gnu_debug",
         "host": "x86_64-pc-linux-gnu",
         "dep_opts": "DEBUG=1"
+      },
+      {
+        "depends_name": "x86_64-pc-linux-gnu_multiprocess",
+        "host": "x86_64-pc-linux-gnu",
+        "dep_opts": "MULTIPROCESS=1"
+      },
+      {
+        "depends_name": "x86_64-pc-linux-gnu_nowallet",
+        "host": "x86_64-pc-linux-gnu",
+        "dep_opts": "NO_WALLET=1"
       }
     ]
   },
@@ -32,8 +42,12 @@
         "depends_name": "x86_64-pc-linux-gnu_debug"
       },
       {
+        "build_target": "linux64_multiprocess",
+        "depends_name": "x86_64-pc-linux-gnu_multiprocess"
+      },
+      {
         "build_target": "linux64_nowallet",
-        "depends_name": "x86_64-pc-linux-gnu_debug"
+        "depends_name": "x86_64-pc-linux-gnu_nowallet"
       },
       {
         "build_target": "linux64_sqlite",
