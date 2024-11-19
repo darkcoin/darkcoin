@@ -14,7 +14,7 @@
       {
         "depends_name": "x86_64-pc-linux-gnu_multiprocess",
         "host": "x86_64-pc-linux-gnu",
-        "dep_opts": "MULTIPROCESS=1"
+        "dep_opts": "DEBUG=1 MULTIPROCESS=1"
       },
       {
         "depends_name": "x86_64-pc-linux-gnu_nowallet",
