@@ -14,7 +14,7 @@
       {
         "depends_name": "x86_64-pc-linux-gnu_multiprocess",
         "host": "x86_64-pc-linux-gnu",
-        "dep_opts": "DEBUG=1 MULTIPROCESS=1"
+        "dep_opts": "DEBUG=1 MULTIPROCESS=1 CC=clang-16 CXX=clang++-16"
       },
       {
         "depends_name": "x86_64-pc-linux-gnu_nowallet",
@@ -55,7 +55,7 @@
       },
       {
         "build_target": "linux64_tsan",
-        "depends_name": "x86_64-pc-linux-gnu_debug"
+        "depends_name": "x86_64-pc-linux-gnu_multiprocess"
       },
       {
         "build_target": "linux64_ubsan",

@@ -209,7 +209,7 @@ x86_64-pc-linux-gnu_multiprocess:
     - .skip-in-fast-mode-template
   variables:
     HOST: x86_64-pc-linux-gnu
-    DEP_OPTS: "DEBUG=1 MULTIPROCESS=1"
+    DEP_OPTS: "DEBUG=1 MULTIPROCESS=1 CC=clang-16 CXX=clang++-16"
 
 x86_64-apple-darwin:
   extends:
@@ -284,7 +284,7 @@ linux64_tsan-build:
     - .build-template
     - .skip-in-fast-mode-template
   needs:
-    - x86_64-pc-linux-gnu_debug
+    - x86_64-pc-linux-gnu_multiprocess
   variables:
     BUILD_TARGET: linux64_tsan
 
