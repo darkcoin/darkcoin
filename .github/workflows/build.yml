@@ -56,16 +56,16 @@ jobs:
           cache-to: type=inline
 
   build-depends:
-    name: Build Dependencies
+    name: ${{ matrix.depends_name }}
     needs: build-image
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         include:
-        - build_target: arm-linux
+        - depends_name: arm-linux-gnueabihf
           host: arm-linux-gnueabihf
-        - build_target: linux64
+        - depends_name: x86_64-pc-linux-gnu
           host: x86_64-pc-linux-gnu
 
     container:
@@ -92,16 +92,16 @@ jobs:
           path: |
             depends/built
             depends/${{ matrix.host }}
-          key: ${{ runner.os }}-depends-${{ matrix.build_target }}-${{ hashFiles('depends/packages/*') }}
+          key: ${{ runner.os }}-depends-${{ matrix.depends_name }}-${{ hashFiles('depends/packages/*') }}
           restore-keys: |
-            ${{ runner.os }}-depends-${{ matrix.build_target }}-${{ hashFiles('depends/packages/*') }}
-            ${{ runner.os }}-depends-${{ matrix.build_target }}
+            ${{ runner.os }}-depends-${{ matrix.depends_name }}-${{ hashFiles('depends/packages/*') }}
+            ${{ runner.os }}-depends-${{ matrix.depends_name }}
 
       - name: Build depends
         run: make -j$(nproc) -C depends HOST=${{ matrix.host }}
 
   build:
-    name: Build
+    name: ${{ matrix.build_target }}
     needs: [build-image, build-depends]
     runs-on: ubuntu-22.04
     strategy:
@@ -109,29 +109,29 @@ jobs:
       matrix:
         include:
           - build_target: arm-linux
+            depends_name: arm-linux-gnueabihf
             host: arm-linux-gnueabihf
-            depends_on: arm-linux
           - build_target: linux64
+            depends_name: x86_64-pc-linux-gnu
             host: x86_64-pc-linux-gnu
-            depends_on: linux64
           - build_target: linux64_cxx20
+            depends_name: x86_64-pc-linux-gnu
             host: x86_64-pc-linux-gnu
-            depends_on: linux64
           - build_target: linux64_fuzz
+            depends_name: x86_64-pc-linux-gnu
             host: x86_64-pc-linux-gnu
-            depends_on: linux64
           - build_target: linux64_nowallet
+            depends_name: x86_64-pc-linux-gnu
             host: x86_64-pc-linux-gnu
-            depends_on: linux64
           - build_target: linux64_sqlite
+            depends_name: x86_64-pc-linux-gnu
             host: x86_64-pc-linux-gnu
-            depends_on: linux64
           - build_target: linux64_tsan
+            depends_name: x86_64-pc-linux-gnu
             host: x86_64-pc-linux-gnu
-            depends_on: linux64
           - build_target: linux64_ubsan
+            depends_name: x86_64-pc-linux-gnu
             host: x86_64-pc-linux-gnu
-            depends_on: linux64
     container:
       image: ghcr.io/${{ needs.build-image.outputs.repo-name }}/dashcore-ci-runner:${{ needs.build-image.outputs.image-tag }}
       options: --user root
@@ -147,7 +147,7 @@ jobs:
           path: |
             depends/built
             depends/${{ matrix.host }}
-          key: ${{ runner.os }}-depends-${{ matrix.depends_on }}-${{ hashFiles('depends/packages/*') }}
+          key: ${{ runner.os }}-depends-${{ matrix.depends_name }}-${{ hashFiles('depends/packages/*') }}
 
       - name: Determine PR Base SHA
         id: vars
