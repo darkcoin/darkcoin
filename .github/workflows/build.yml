@@ -176,19 +176,22 @@ jobs:
       - name: Build source and run tests
         run: |
           git config --global --add safe.directory "$PWD"
-          CCACHE_SIZE="400M"
-          CACHE_DIR="/cache"
-          mkdir /output
-          BASE_OUTDIR="/output"
-          BUILD_TARGET="${{ matrix.build_target }}"
+          export ARTIFACT_PATH="/output"
+          export BUILD_TARGET="${{ matrix.build_target }}"
+          export CACHE_DIR="/cache"
+          export CCACHE_SIZE="400M"
           source ./ci/dash/matrix.sh
           ./ci/dash/build_src.sh
           ./ci/dash/test_unittests.sh
+          ./ci/dash/create-artifacts.sh
         shell: bash
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts-${{ matrix.build_target }}
+          name: artifacts_${{ matrix.build_target }}
           path: |
-            /output
+            /output/artifacts_${{ matrix.build_target }}.tar.zst
+            /output/artifacts_${{ matrix.build_target }}.tar.zst.sha256
+          compression-level: 0
+          retention-days: 3

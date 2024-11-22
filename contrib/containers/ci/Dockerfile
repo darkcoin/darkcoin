@@ -134,7 +134,8 @@ RUN apt-get update && apt-get install $APT_ARGS \
     valgrind \
     wine-stable \
     wine64 \
-    xorriso
+    xorriso \
+    zstd
 
 ARG CPPCHECK_VERSION=2.13.0
 RUN curl -sL "https://github.com/danmar/cppcheck/archive/${CPPCHECK_VERSION}.tar.gz" | tar -xvzf - --directory /tmp/
