@@ -19,6 +19,8 @@ jobs:
     outputs:
       image-tag: ${{ steps.prepare.outputs.image-tag }}
       repo-name: ${{ steps.prepare.outputs.repo-name }}
+      dep-matrix: ${{ steps.prepare.outputs.dep-matrix }}
+      src-matrix: ${{ steps.prepare.outputs.src-matrix }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,6 +34,8 @@ jobs:
           REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "image-tag=${BRANCH_NAME}" >> $GITHUB_OUTPUT
           echo "repo-name=${REPO_NAME}" >> $GITHUB_OUTPUT
+          echo "dep-matrix=$(jq -r '.dep' -c .github/workflows/matrix.json)" >> $GITHUB_OUTPUT
+          echo "src-matrix=$(jq -r '.src' -c .github/workflows/matrix.json)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -56,18 +60,12 @@ jobs:
           cache-to: type=inline
 
   build-depends:
-    name: Build Dependencies
+    name: ${{ matrix.depends_name }}
     needs: build-image
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
-      matrix:
-        include:
-        - build_target: arm-linux
-          host: arm-linux-gnueabihf
-        - build_target: linux64
-          host: x86_64-pc-linux-gnu
-
+      matrix: ${{ fromJson(needs.build-image.outputs.dep-matrix) }}
     container:
       image: ghcr.io/${{ needs.build-image.outputs.repo-name }}/dashcore-ci-runner:${{ needs.build-image.outputs.image-tag }}
       options: --user root
@@ -86,52 +84,36 @@ jobs:
           restore-keys: |
             depends-sources-
 
+      - name: Determine params
+        id: det-params
+        run: |
+          dep_name="${{ matrix.depends_name }}"
+          dep_opts="${{ matrix.dep_opts }}"
+          dep_hash="$(echo -n ${dep_opts} | sha256sum | head -c 64)"
+          echo "\"${dep_name}\" has DEP_OPTS \"${dep_opts}\" with hash \"${dep_hash}\""
+          echo "dep_hash=${dep_hash}" >> $GITHUB_OUTPUT
+
       - name: Cache depends
         uses: actions/cache@v4
         with:
           path: |
             depends/built
             depends/${{ matrix.host }}
-          key: ${{ runner.os }}-depends-${{ matrix.build_target }}-${{ hashFiles('depends/packages/*') }}
+          key: ${{ runner.os }}-depends-${{ matrix.depends_name }}-${{ hashFiles('depends/packages/*') }}-${{ steps.det-params.outputs.dep_hash }}
           restore-keys: |
-            ${{ runner.os }}-depends-${{ matrix.build_target }}-${{ hashFiles('depends/packages/*') }}
-            ${{ runner.os }}-depends-${{ matrix.build_target }}
+            ${{ runner.os }}-depends-${{ matrix.depends_name }}-${{ hashFiles('depends/packages/*') }}-
+            ${{ runner.os }}-depends-${{ matrix.depends_name }}-
 
       - name: Build depends
-        run: make -j$(nproc) -C depends HOST=${{ matrix.host }}
+        run: env HOST=${{ matrix.host }} ${{ matrix.dep_opts }} make -j$(nproc) -C depends
 
   build:
-    name: Build
+    name: ${{ matrix.build_target }}
     needs: [build-image, build-depends]
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - build_target: arm-linux
-            host: arm-linux-gnueabihf
-            depends_on: arm-linux
-          - build_target: linux64
-            host: x86_64-pc-linux-gnu
-            depends_on: linux64
-          - build_target: linux64_tsan
-            host: x86_64-pc-linux-gnu
-            depends_on: linux64
-          - build_target: linux64_ubsan
-            host: x86_64-pc-linux-gnu
-            depends_on: linux64
-          - build_target: linux64_fuzz
-            host: x86_64-pc-linux-gnu
-            depends_on: linux64
-          - build_target: linux64_cxx20
-            host: x86_64-pc-linux-gnu
-            depends_on: linux64
-          - build_target: linux64_sqlite
-            host: x86_64-pc-linux-gnu
-            depends_on: linux64
-          - build_target: linux64_nowallet
-            host: x86_64-pc-linux-gnu
-            depends_on: linux64
+      matrix: ${{ fromJson(needs.build-image.outputs.src-matrix) }}
     container:
       image: ghcr.io/${{ needs.build-image.outputs.repo-name }}/dashcore-ci-runner:${{ needs.build-image.outputs.image-tag }}
       options: --user root
@@ -141,13 +123,28 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Determine params
+        id: det-params
+        run: |
+          dep_name="${{ matrix.depends_name }}"
+          dep_opts="$(jq -r ".dep.include[] | select(.depends_name == \"${{ matrix.depends_name }}\") | .dep_opts" -c .github/workflows/matrix.json)"
+          dep_hash="$(echo -n ${dep_opts} | sha256sum | head -c 64)"
+          echo "\"${dep_name}\" has DEP_OPTS \"${dep_opts}\" with hash \"${dep_hash}\""
+          echo "dep_hash=${dep_hash}" >> $GITHUB_OUTPUT
+          dep_host="$(jq -r ".dep.include[] | select(.depends_name == \"${{ matrix.depends_name }}\") | .host" -c .github/workflows/matrix.json)"
+          echo "\"${dep_name}\" has HOST \"${dep_host}\""
+          echo "dep_host=${dep_host}" >> $GITHUB_OUTPUT
+
       - name: Restore depends cache
         uses: actions/cache/restore@v4
         with:
           path: |
             depends/built
-            depends/${{ matrix.host }}
-          key: ${{ runner.os }}-depends-${{ matrix.depends_on }}-${{ hashFiles('depends/packages/*') }}
+            depends/${{ steps.det-params.outputs.dep_host }}
+          key: ${{ runner.os }}-depends-${{ matrix.depends_name }}-${{ hashFiles('depends/packages/*') }}-${{ steps.det-params.outputs.dep_hash }}
+          restore-keys: |
+            ${{ runner.os }}-depends-${{ matrix.depends_name }}-${{ hashFiles('depends/packages/*') }}-
+            ${{ runner.os }}-depends-${{ matrix.depends_name }}-
 
       - name: Determine PR Base SHA
         id: vars
