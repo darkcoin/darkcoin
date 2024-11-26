@@ -10,5 +10,5 @@ export CONTAINER_NAME=ci_native_multiprocess
 export PACKAGES="cmake python3 llvm clang"
 export DEP_OPTS="DEBUG=1 MULTIPROCESS=1"
 export GOAL="install"
-export BITCOIN_CONFIG="--with-boost-process --enable-debug CC=clang CXX=clang++" # Use clang to avoid OOM
-export TEST_RUNNER_ENV="BITCOIND=dash-node"
+export BITCOIN_CONFIG="--with-boost-process --enable-debug CC=clang-18 CXX=clang++-18" # Use clang to avoid OOM
+export BITCOIND=dash-node  # Used in functional tests

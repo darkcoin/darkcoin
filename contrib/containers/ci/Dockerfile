@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND="noninteractive" TZ="Europe/London"
 # (zlib1g-dev is needed for the Qt host binary builds, but should not be used by target binaries)
 ENV APT_ARGS="-y --no-install-recommends --no-upgrade"
 
-
+SHELL ["/bin/bash", "-c"]
 # Install packages for i386; disabled on aarch64 and arm64 hosts
 RUN (dpkg --print-architecture | grep -Eq 'aarch64|arm64' || dpkg --add-architecture i386)
 RUN (dpkg --print-architecture | grep -Eq 'aarch64|arm64' || (apt-get update && apt-get install $APT_ARGS \
@@ -23,13 +23,11 @@ RUN apt-get update && apt-get install $APT_ARGS \
     bsdmainutils \
     curl \
     ccache \
-    clang \
     cmake \
     g++ \
     gettext \
     git \
-    libc++-dev \
-    libc++abi-dev \
+    gnupg \
     libtool \
     libxcb-icccm4 \
     libxcb-image0 \
@@ -42,11 +40,36 @@ RUN apt-get update && apt-get install $APT_ARGS \
     libxcb-xinerama0 \
     libxcb-xkb1 \
     libxkbcommon-x11-0 \
-    wget \
+    lsb-release \
+    software-properties-common \
     unzip \
+    wget \
     m4 \
     pkg-config \
     zlib1g-dev
+
+# Install Clang+LLVM and set it as default
+# We don't need all packages but the default set doesn't include some
+# packages we want so we will need to install some of them manually.
+ARG LLVM_VERSION=18
+RUN set -ex; \
+    cd /tmp && \
+    wget https://apt.llvm.org/llvm.sh && \
+    chmod +x llvm.sh && \
+    /tmp/llvm.sh ${LLVM_VERSION} && \
+    rm -rf /tmp/llvm.sh; \
+    apt-get update && apt-get install $APT_ARGS \
+    clang-format-${LLVM_VERSION} \
+    clang-tidy-${LLVM_VERSION} \
+    libc++-${LLVM_VERSION}-dev \
+    libc++abi-${LLVM_VERSION}-dev \
+    libclang-rt-${LLVM_VERSION}-dev; \
+    rm -rf /var/lib/apt/lists/*; \
+    lldbUpdAltArgs="update-alternatives --install /usr/bin/llvm-config llvm-config /usr/bin/llvm-config-${LLVM_VERSION} 100"; \
+    for binName in clang clang++ clang-format clang-tidy clangd ld.lld lldb lldb-server; do \
+        lldbUpdAltArgs="${lldbUpdAltArgs} --slave /usr/bin/${binName} ${binName} /usr/bin/${binName}-${LLVM_VERSION}"; \
+    done; \
+    bash -c "${lldbUpdAltArgs}";
 
 # Python setup
 # PYTHON_VERSION should match the value in .python-version
@@ -61,7 +84,6 @@ RUN apt-get update && apt-get install $APT_ARGS \
     libreadline-dev \
     libsqlite3-dev \
     libssl-dev \
-    llvm \
     make \
     tk-dev \
     xz-utils
@@ -112,7 +134,8 @@ RUN apt-get update && apt-get install $APT_ARGS \
     valgrind \
     wine-stable \
     wine64 \
-    xorriso
+    xorriso \
+    zstd
 
 ARG CPPCHECK_VERSION=2.13.0
 RUN curl -sL "https://github.com/danmar/cppcheck/archive/${CPPCHECK_VERSION}.tar.gz" | tar -xvzf - --directory /tmp/
@@ -135,20 +158,6 @@ RUN \
   update-alternatives --set x86_64-w64-mingw32-gcc  /usr/bin/x86_64-w64-mingw32-gcc-posix; \
   update-alternatives --set x86_64-w64-mingw32-g++  /usr/bin/x86_64-w64-mingw32-g++-posix; \
   exit 0
-
-ARG LLVM_VERSION=16
-# Setup Clang+LLVM support
-RUN apt-get update && apt-get install $APT_ARGS \
-    lsb-release \
-    software-properties-common \
-    gnupg \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN cd /tmp && \
-    wget https://apt.llvm.org/llvm.sh && \
-    chmod +x llvm.sh && \
-    /tmp/llvm.sh ${LLVM_VERSION} && \
-    rm -rf /tmp/llvm.sh
 
 RUN \
   mkdir -p /src/dash && \

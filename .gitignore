@@ -163,6 +163,7 @@ cmake-build-debug
 dist/
 
 /guix-build-*
+!contrib/containers/guix/**/
 
 # cppcheck cache-directory
 test/lint/.cppcheck/*
