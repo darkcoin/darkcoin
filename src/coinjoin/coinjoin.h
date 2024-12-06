@@ -7,6 +7,7 @@
 
 #include <coinjoin/common.h>
 
+#include <bls/bls.h>
 #include <core_io.h>
 #include <netaddress.h>
 #include <primitives/block.h>
@@ -183,7 +184,7 @@ public:
     uint256 m_protxHash;
     int64_t nTime{0};
     bool fReady{false}; //ready for submit
-    std::vector<unsigned char> vchSig;
+    std::array<unsigned char, BLS_CURVE_SIG_SIZE> vchSig;
     // memory only
     bool fTried{false};
 
@@ -243,7 +244,7 @@ public:
     CTransactionRef tx;
     COutPoint masternodeOutpoint;
     uint256 m_protxHash;
-    std::vector<unsigned char> vchSig;
+    std::array<unsigned char, BLS_CURVE_SIG_SIZE> vchSig;
     int64_t sigTime{0};
     CCoinJoinBroadcastTx() :
         tx(MakeTransactionRef(CMutableTransaction{}))
