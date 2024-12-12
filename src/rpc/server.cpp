@@ -561,7 +561,7 @@ UniValue CRPCTable::dumpArgMap(const JSONRPCRequest& args_request) const
         // TODO: implement mapping argument to type for composite commands
         if (cmd.first.find(' ') != std::string::npos) continue;
         UniValue result;
-        if (ExecuteCommands(cmd.second, request, result, mapPlatformRestrictions)) {
+        if (ExecuteCommands(cmd.second, request, result)) {
             for (const auto& values : result.getValues()) {
                 ret.push_back(values);
             }
