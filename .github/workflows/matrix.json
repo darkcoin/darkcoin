@@ -1,0 +1,66 @@
+{
+  "dep": {
+    "include": [
+      {
+        "depends_name": "arm-linux-gnueabihf",
+        "host": "arm-linux-gnueabihf",
+        "dep_opts": ""
+      },
+      {
+        "depends_name": "x86_64-pc-linux-gnu_debug",
+        "host": "x86_64-pc-linux-gnu",
+        "dep_opts": "DEBUG=1"
+      },
+      {
+        "depends_name": "x86_64-pc-linux-gnu_multiprocess",
+        "host": "x86_64-pc-linux-gnu",
+        "dep_opts": "DEBUG=1 MULTIPROCESS=1 CC=clang-18 CXX=clang++-18"
+      },
+      {
+        "depends_name": "x86_64-pc-linux-gnu_nowallet",
+        "host": "x86_64-pc-linux-gnu",
+        "dep_opts": "NO_WALLET=1"
+      }
+    ]
+  },
+  "src": {
+    "include": [
+      {
+        "build_target": "arm-linux",
+        "depends_name": "arm-linux-gnueabihf"
+      },
+      {
+        "build_target": "linux64",
+        "depends_name": "x86_64-pc-linux-gnu_debug"
+      },
+      {
+        "build_target": "linux64_cxx20",
+        "depends_name": "x86_64-pc-linux-gnu_debug"
+      },
+      {
+        "build_target": "linux64_fuzz",
+        "depends_name": "x86_64-pc-linux-gnu_debug"
+      },
+      {
+        "build_target": "linux64_multiprocess",
+        "depends_name": "x86_64-pc-linux-gnu_multiprocess"
+      },
+      {
+        "build_target": "linux64_nowallet",
+        "depends_name": "x86_64-pc-linux-gnu_nowallet"
+      },
+      {
+        "build_target": "linux64_sqlite",
+        "depends_name": "x86_64-pc-linux-gnu_debug"
+      },
+      {
+        "build_target": "linux64_tsan",
+        "depends_name": "x86_64-pc-linux-gnu_multiprocess"
+      },
+      {
+        "build_target": "linux64_ubsan",
+        "depends_name": "x86_64-pc-linux-gnu_debug"
+      }
+    ]
+  }
+}
