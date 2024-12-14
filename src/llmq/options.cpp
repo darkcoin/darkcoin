@@ -128,8 +128,6 @@ bool IsQuorumTypeEnabledInternal(Consensus::LLMQType llmqType, gsl::not_null<con
     const bool fHaveDIP0024Quorums{optHaveDIP0024Quorums.value_or(pindexPrev->nHeight >= consensusParams.DIP0024QuorumsHeight)};
     switch (llmqType)
     {
-        case Consensus::LLMQType::LLMQ_DEVNET:
-            return true;
         case Consensus::LLMQType::LLMQ_50_60:
             return !fDIP0024IsActive || !fHaveDIP0024Quorums || Params().NetworkIDString() == CBaseChainParams::TESTNET ||
                    Params().NetworkIDString() == CBaseChainParams::DEVNET;
@@ -141,6 +139,8 @@ bool IsQuorumTypeEnabledInternal(Consensus::LLMQType llmqType, gsl::not_null<con
         case Consensus::LLMQType::LLMQ_400_60:
         case Consensus::LLMQType::LLMQ_400_85:
         case Consensus::LLMQType::LLMQ_DEVNET_PLATFORM:
+        case Consensus::LLMQType::LLMQ_DEVNET:
+        case Consensus::LLMQType::LLMQ_SINGLE_NODE:
             return true;
 
         case Consensus::LLMQType::LLMQ_TEST_V17: {
@@ -154,6 +154,7 @@ bool IsQuorumTypeEnabledInternal(Consensus::LLMQType llmqType, gsl::not_null<con
         case Consensus::LLMQType::LLMQ_TEST_DIP0024: {
             return fDIP0024IsActive;
         }
+        // TODO: remove it in case of testnet reset
         case Consensus::LLMQType::LLMQ_25_67:
             return pindexPrev->nHeight >= TESTNET_LLMQ_25_67_ACTIVATION_HEIGHT;
 

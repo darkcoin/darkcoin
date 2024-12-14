@@ -174,13 +174,15 @@ std::vector<CDeterministicMNCPtr> GetAllQuorumMembers(Consensus::LLMQType llmqTy
 
 std::vector<CDeterministicMNCPtr> ComputeQuorumMembers(Consensus::LLMQType llmqType, CDeterministicMNManager& dmnman, const CBlockIndex* pQuorumBaseBlockIndex)
 {
-    bool EvoOnly = (Params().GetConsensus().llmqTypePlatform == llmqType) && IsV19Active(pQuorumBaseBlockIndex);
+    // it will just works for evo, when you set it as PlatformQuorum
     const auto& llmq_params_opt = Params().GetLLMQ(llmqType);
     assert(llmq_params_opt.has_value());
     if (llmq_params_opt->useRotation || pQuorumBaseBlockIndex->nHeight % llmq_params_opt->dkgInterval != 0) {
         ASSERT_IF_DEBUG(false);
         return {};
     }
+    bool EvoOnly = (Params().GetConsensus().llmqTypePlatform == llmqType) && IsV19Active(pQuorumBaseBlockIndex);
+    if (llmq_params_opt->size == 1) EvoOnly = true;
 
     const CBlockIndex* pWorkBlockIndex = IsV20Active(pQuorumBaseBlockIndex) ?
             pQuorumBaseBlockIndex->GetAncestor(pQuorumBaseBlockIndex->nHeight - 8) :

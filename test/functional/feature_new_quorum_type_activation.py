@@ -25,17 +25,17 @@ class NewQuorumTypeActivationTest(BitcoinTestFramework):
         self.generate(self.nodes[0], 9, sync_fun=self.no_op)
         assert_equal(get_bip9_details(self.nodes[0], 'testdummy')['status'], 'started')
         ql = self.nodes[0].quorum("list")
-        assert_equal(len(ql), 3)
+        assert_equal(len(ql), 4)
         assert "llmq_test_v17" not in ql
         self.generate(self.nodes[0], 10, sync_fun=self.no_op)
         assert_equal(get_bip9_details(self.nodes[0], 'testdummy')['status'], 'locked_in')
         ql = self.nodes[0].quorum("list")
-        assert_equal(len(ql), 3)
+        assert_equal(len(ql), 4)
         assert "llmq_test_v17" not in ql
         self.generate(self.nodes[0], 10, sync_fun=self.no_op)
         assert_equal(get_bip9_details(self.nodes[0], 'testdummy')['status'], 'active')
         ql = self.nodes[0].quorum("list")
-        assert_equal(len(ql), 4)
+        assert_equal(len(ql), 5)
         assert "llmq_test_v17" in ql
 
 

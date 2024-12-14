@@ -1194,7 +1194,7 @@ class DashTestFramework(BitcoinTestFramework):
         self.quorum_data_request_expiration_timeout = 360
 
 
-    def activate_by_name(self, name, expected_activation_height=None):
+    def activate_by_name(self, name, expected_activation_height=None, slow_mode=True):
         assert not softfork_active(self.nodes[0], name)
         self.log.info("Wait for " + name + " activation")
 
@@ -1205,7 +1205,7 @@ class DashTestFramework(BitcoinTestFramework):
         self.wait_for_sporks_same()
 
         # mine blocks in batches
-        batch_size = 50
+        batch_size = 50 if not slow_mode else 10
         if expected_activation_height is not None:
             height = self.nodes[0].getblockcount()
             assert height < expected_activation_height
@@ -1258,7 +1258,6 @@ class DashTestFramework(BitcoinTestFramework):
         for i in range(0, idx):
             self.connect_nodes(i, idx)
 
-    # TODO: to let creating Evo Nodes without instant-send available
     def dynamically_add_masternode(self, evo=False, rnd=None, should_be_rejected=False):
         mn_idx = len(self.nodes)
 
@@ -1279,7 +1278,7 @@ class DashTestFramework(BitcoinTestFramework):
             return
 
         self.dynamically_initialize_datadir(node_p2p_port, node_rpc_port)
-        node_info = self.add_dynamically_node(self.extra_args[1])
+        node_info = self.add_dynamically_node(self.extra_args[1] if len(self.extra_args) > 1 else self.extra_args[0])
 
         args = ['-masternodeblsprivkey=%s' % created_mn_info.keyOperator] + node_info.extra_args
         self.start_node(mn_idx, args)

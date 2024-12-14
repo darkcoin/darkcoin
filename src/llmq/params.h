@@ -37,7 +37,9 @@ enum class LLMQType : uint8_t {
     LLMQ_TEST_PLATFORM = 106,    // 3 members, 2 (66%) threshold, one per hour.
 
     // for devnets only. rotated version (v2) for devnets
-    LLMQ_DEVNET_DIP0024 = 105 // 8 members, 4 (50%) threshold, one per hour. Params might differ when -llmqdevnetparams is used
+    LLMQ_DEVNET_DIP0024 = 105, // 8 members, 4 (50%) threshold, one per hour. Params might differ when -llmqdevnetparams is used
+
+    LLMQ_SINGLE_NODE = 111, // 1 memeber, 1 threshold, one per hour.
 };
 
 // Configures a LLMQ and its DKG
@@ -129,7 +131,7 @@ static_assert(std::is_trivially_copyable_v<Consensus::LLMQParams>, "LLMQParams i
 static_assert(std::is_trivially_assignable_v<Consensus::LLMQParams, Consensus::LLMQParams>, "LLMQParams is not trivially assignable");
 
 
-static constexpr std::array<LLMQParams, 14> available_llmqs = {
+static constexpr std::array<LLMQParams, 15> available_llmqs = {
 
     /**
      * llmq_test
@@ -500,6 +502,34 @@ static constexpr std::array<LLMQParams, 14> available_llmqs = {
         .keepOldConnections = 25,
         .keepOldKeys = 24 * 30 * 2, // 2 months of quorums
         .recoveryMembers = 12,
+    },
+
+    /**
+     * llmq_1_100
+     * This quorum is used explicitly on Regtest and requires
+     * just 1 participant
+     *
+     * Used for Platform for easy setup testing environment
+     */
+    LLMQParams{
+        .type = LLMQType::LLMQ_SINGLE_NODE,
+        .name = "llmq_1_100",
+        .useRotation = false,
+        .size = 1,
+        .minSize = 1,
+        .threshold = 1,
+
+        .dkgInterval = 24, // one DKG per hour
+        .dkgPhaseBlocks = 2,
+        .dkgMiningWindowStart = 10, // dkgPhaseBlocks * 5 = after finalization
+        .dkgMiningWindowEnd = 18,
+        .dkgBadVotesThreshold = 2,
+
+        .signingActiveQuorumCount = 2, // just a few ones to allow easier testing
+
+        .keepOldConnections = 3,
+        .keepOldKeys = 4,
+        .recoveryMembers = 1,
     },
 
 }; // available_llmqs
