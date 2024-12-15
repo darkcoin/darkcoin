@@ -1515,8 +1515,6 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     GetMainSignals().RegisterBackgroundSignalScheduler(*node.scheduler);
 
-    tableRPC.InitPlatformRestrictions();
-
     /* Register RPC commands regardless of -server setting so they will be
      * available in the GUI RPC console even if external calls are disabled.
      */
