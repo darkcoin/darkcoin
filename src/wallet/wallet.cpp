@@ -3580,6 +3580,11 @@ bool CWallet::CreateTransactionInternal(
         error = strprintf(_("Fee rate (%s) is lower than the minimum fee rate setting (%s)"), coin_control.m_feerate->ToString(FeeEstimateMode::DUFF_B), coin_selection_params.m_effective_feerate.ToString(FeeEstimateMode::DUFF_B));
         return false;
     }
+    if (feeCalc.reason == FeeReason::FALLBACK && !m_allow_fallback_fee) {
+        // eventually allow a fallback fee
+        error = _("Fee estimation failed. Fallbackfee is disabled. Wait a few blocks or enable -fallbackfee.");
+        return false;
+    }
 
     int nBytes{0};
     {
@@ -3731,7 +3736,7 @@ bool CWallet::CreateTransactionInternal(
                         txin.scriptSig = CScript();
                     }
 
-                    nFee = GetMinimumFee(*this, nBytes, coin_control, &feeCalc);
+                    nFee = coin_selection_params.m_effective_feerate.GetFee(nBytes);
 
                     return true;
                 };
@@ -3838,12 +3843,6 @@ bool CWallet::CreateTransactionInternal(
                             i++;
                         }
                     }
-                }
-
-                if (feeCalc.reason == FeeReason::FALLBACK && !m_allow_fallback_fee) {
-                    // eventually allow a fallback fee
-                    error = _("Fee estimation failed. Fallbackfee is disabled. Wait a few blocks or enable -fallbackfee.");
-                    return false;
                 }
 
                 if (nAmountLeft == nFeeRet) {
