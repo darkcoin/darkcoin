@@ -59,7 +59,7 @@ public:
     explicit CBLSWrapper() = default;
     explicit CBLSWrapper(Span<const unsigned char> vecBytes) : CBLSWrapper<ImplType, _SerSize, C>()
     {
-        SetByteVector(vecBytes, bls::bls_legacy_scheme.load());
+        SetBytes(vecBytes, bls::bls_legacy_scheme.load());
     }
 
     CBLSWrapper(const CBLSWrapper& ref) = default;
@@ -103,7 +103,7 @@ public:
         *(static_cast<C*>(this)) = C();
     }
 
-    void SetByteVector(Span<const uint8_t> vecBytes, const bool specificLegacyScheme)
+    void SetBytes(Span<const uint8_t> vecBytes, const bool specificLegacyScheme)
     {
         if (vecBytes.size() != SerSize) {
             Reset();
@@ -155,7 +155,7 @@ public:
             Reset();
             return false;
         }
-        SetByteVector(b, specificLegacyScheme);
+        SetBytes(b, specificLegacyScheme);
         return IsValid();
     }
 
@@ -181,12 +181,12 @@ public:
     {
         std::array<uint8_t, SerSize> vecBytes{};
         s.read(AsWritableBytes(Span{vecBytes.data(), SerSize}));
-        SetByteVector(vecBytes, specificLegacyScheme);
+        SetBytes(vecBytes, specificLegacyScheme);
 
         if (!CheckMalleable(vecBytes, specificLegacyScheme)) {
             // If CheckMalleable failed with specificLegacyScheme, we need to try again with the opposite scheme.
             // Probably we received the BLS object sent with legacy scheme, but in the meanwhile the fork activated.
-            SetByteVector(vecBytes, !specificLegacyScheme);
+            SetBytes(vecBytes, !specificLegacyScheme);
             if (!CheckMalleable(vecBytes, !specificLegacyScheme)) {
                 // Both attempts failed
                 throw std::ios_base::failure("malleable BLS object");
@@ -484,7 +484,7 @@ public:
             return invalidObj;
         }
         if (!objInitialized) {
-            obj.SetByteVector(vecBytes, bufLegacyScheme);
+            obj.SetBytes(vecBytes, bufLegacyScheme);
             if (!obj.IsValid()) {
                 bufValid = false;
                 return invalidObj;
