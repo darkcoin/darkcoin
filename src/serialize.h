@@ -820,6 +820,9 @@ template<typename Stream, unsigned int N, typename T> inline void Unserialize(St
 template<typename Stream, typename T, typename A> inline void Serialize(Stream& os, const std::vector<T, A>& v);
 template<typename Stream, typename T, typename A> inline void Unserialize(Stream& is, std::vector<T, A>& v);
 
+template <typename Stream, typename T, std::size_t N> void Serialize(Stream& os, const std::array<T, N>& a);
+template <typename Stream, typename T, std::size_t N> void Unserialize(Stream& is, std::array<T, N>& a);
+
 /**
  * pair
  */
@@ -1051,6 +1054,54 @@ void Unserialize(Stream& is, std::vector<T, A>& v)
     }
 }
 
+/**
+ * array
+ */
+template <typename Stream, typename T, std::size_t N>
+void Serialize(Stream& os, const std::array<T, N>& a)
+{
+    if constexpr (std::is_same_v<T, unsigned char>) {
+        // Directly write the byte data without writing the size
+        if (!a.empty()) {
+            os.write(MakeByteSpan(a));
+        }
+    }
+    else if constexpr (std::is_same_v<T, bool>) {
+        // Serialize each bool individually
+        for (const bool& elem : a) {
+            ::Serialize(os, elem);
+        }
+    }
+    else {
+        // Serialize each element using the default Serialize function
+        for (const T& elem : a) {
+            ::Serialize(os, elem);
+        }
+    }
+}
+
+template <typename Stream, typename T, std::size_t N>
+void Unserialize(Stream& is, std::array<T, N>& a)
+{
+    if constexpr (std::is_same_v<T, unsigned char>) {
+        // Directly read the byte data without reading the size
+        if (N > 0) {
+            is.read(AsWritableBytes(Span{a}));
+        }
+    }
+    else if constexpr (std::is_same_v<T, bool>) {
+        // Unserialize each bool individually
+        for (bool& elem : a) {
+            ::Unserialize(is, elem);
+        }
+    }
+    else {
+        // Unserialize each element using the default Unserialize function
+        for (T& elem : a) {
+            ::Unserialize(is, elem);
+        }
+    }
+}
 
 /**
  * pair

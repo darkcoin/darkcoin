@@ -55,7 +55,7 @@ bool CCoinJoinQueue::Sign(const CActiveMasternodeManager& mn_activeman)
     if (!sig.IsValid()) {
         return false;
     }
-    vchSig = sig.ToByteVector(false);
+    vchSig = sig.ToBytes(false);
 
     return true;
 }
@@ -94,7 +94,7 @@ bool CCoinJoinBroadcastTx::Sign(const CActiveMasternodeManager& mn_activeman)
     if (!sig.IsValid()) {
         return false;
     }
-    vchSig = sig.ToByteVector(false);
+    vchSig = sig.ToBytes(false);
 
     return true;
 }

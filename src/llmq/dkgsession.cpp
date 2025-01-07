@@ -1019,12 +1019,12 @@ void CDKGSession::SendCommitment(CDKGPendingMessages& pendingMessages, PeerManag
 
     if (lieType == 3) {
         const bool is_bls_legacy = bls::bls_legacy_scheme.load();
-        std::vector<uint8_t> buf = qc.sig.ToByteVector(is_bls_legacy);
+        auto buf = qc.sig.ToBytes(is_bls_legacy);
         buf[5]++;
         qc.sig.SetByteVector(buf, is_bls_legacy);
     } else if (lieType == 4) {
         const bool is_bls_legacy = bls::bls_legacy_scheme.load();
-        std::vector<uint8_t> buf = qc.quorumSig.ToByteVector(is_bls_legacy);
+        auto buf = qc.quorumSig.ToBytes(is_bls_legacy);
         buf[5]++;
         qc.quorumSig.SetByteVector(buf, is_bls_legacy);
     }
