@@ -27,10 +27,10 @@ class Loader;
 //! behavior.
 struct WalletContext {
     interfaces::Chain* chain{nullptr};
-    ArgsManager* args{nullptr};
+    ArgsManager* args{nullptr}; // Currently a raw pointer because the memory is not managed by this struct
     // TODO: replace this unique_ptr to a pointer
     // probably possible to do after bitcoin/bitcoin#22219
-    const std::unique_ptr<interfaces::CoinJoin::Loader>& m_coinjoin_loader;
+    const std::unique_ptr<interfaces::CoinJoin::Loader>& coinjoin_loader;
 
     //! Declare default constructor and destructor that are not inline, so code
     //! instantiating the WalletContext struct doesn't need to #include class
