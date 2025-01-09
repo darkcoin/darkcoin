@@ -108,9 +108,10 @@ void TestAddAddressesToSendBook(interfaces::Node& node)
     // Initialize relevant QT models.
     OptionsModel optionsModel;
     ClientModel clientModel(node, &optionsModel);
-    AddWallet(wallet);
-    WalletModel walletModel(interfaces::MakeWallet(wallet), clientModel);
-    RemoveWallet(wallet, std::nullopt);
+    WalletContext& context = *node.walletLoader().context();
+    AddWallet(context, wallet);
+    WalletModel walletModel(interfaces::MakeWallet(context, wallet), clientModel);
+    RemoveWallet(context, wallet, /*load_on_startup=*/std::nullopt);
     EditAddressDialog editAddressDialog(EditAddressDialog::NewSendingAddress);
     editAddressDialog.setModel(walletModel.getAddressTableModel());
 

@@ -14,6 +14,7 @@
 #include <util/translation.h>
 #include <policy/settings.h>
 #include <validation.h>
+#include <wallet/context.h>
 #include <wallet/wallet.h>
 
 #include <boost/test/unit_test.hpp>
@@ -129,12 +130,14 @@ class CTransactionBuilderTestSetup : public TestChain100Setup
 {
 public:
     CTransactionBuilderTestSetup()
+        : context{m_node.coinjoin_loader}
     {
+        context.chain = m_node.chain.get();
         CreateAndProcessBlock({}, GetScriptForRawPubKey(coinbaseKey.GetPubKey()));
         wallet = std::make_unique<CWallet>(m_node.chain.get(), m_node.coinjoin_loader.get(), "", CreateMockWalletDatabase());
         wallet->SetupLegacyScriptPubKeyMan();
         wallet->LoadWallet();
-        AddWallet(wallet);
+        AddWallet(context, wallet);
         {
             LOCK2(wallet->cs_wallet, cs_main);
             wallet->GetLegacyScriptPubKeyMan()->AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey());
@@ -148,9 +151,10 @@ public:
 
     ~CTransactionBuilderTestSetup()
     {
-        RemoveWallet(wallet, std::nullopt);
+        RemoveWallet(context, wallet, /*load_on_startup=*/std::nullopt);
     }
 
+    WalletContext context;
     std::shared_ptr<CWallet> wallet;
 
     CWalletTx& AddTxToChain(uint256 nTxHash)
