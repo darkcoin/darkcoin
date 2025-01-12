@@ -45,8 +45,8 @@ public:
     void Construct(NodeContext& node) const override;
 
     // Dash Specific Wallet Init
-    void AutoLockMasternodeCollaterals() const override;
-    void InitCoinJoinSettings(const CoinJoinWalletManager& cjwalletman) const override;
+    void AutoLockMasternodeCollaterals(interfaces::WalletLoader& wallet_loader) const override;
+    void InitCoinJoinSettings(interfaces::WalletLoader& wallet_loader, const CoinJoinWalletManager& cjwalletman) const override;
     bool InitAutoBackup() const override;
 };
 
@@ -193,25 +193,26 @@ void WalletInit::Construct(NodeContext& node) const
 }
 
 
-void WalletInit::AutoLockMasternodeCollaterals() const
+void WalletInit::AutoLockMasternodeCollaterals(interfaces::WalletLoader& wallet_loader) const
 {
     // we can't do this before DIP3 is fully initialized
-    for (const auto& pwallet : GetWallets()) {
-        pwallet->AutoLockMasternodeCollaterals();
+    for (const auto& wallet : wallet_loader.getWallets()) {
+        wallet->autoLockMasternodeCollaterals();
     }
 }
 
-void WalletInit::InitCoinJoinSettings(const CoinJoinWalletManager& cjwalletman) const
+void WalletInit::InitCoinJoinSettings(interfaces::WalletLoader& wallet_loader, const CoinJoinWalletManager& cjwalletman) const
 {
-    CCoinJoinClientOptions::SetEnabled(!GetWallets().empty() ? gArgs.GetBoolArg("-enablecoinjoin", true) : false);
+    const auto& wallets{wallet_loader.getWallets()};
+    CCoinJoinClientOptions::SetEnabled(!wallets.empty() ? gArgs.GetBoolArg("-enablecoinjoin", true) : false);
     if (!CCoinJoinClientOptions::IsEnabled()) {
         return;
     }
     bool fAutoStart = gArgs.GetBoolArg("-coinjoinautostart", DEFAULT_COINJOIN_AUTOSTART);
-    for (auto& pwallet : GetWallets()) {
-        auto manager = cjwalletman.Get(pwallet->GetName());
+    for (auto& wallet : wallets) {
+        auto manager = cjwalletman.Get(wallet->getWalletName());
         assert(manager != nullptr);
-        if (pwallet->IsLocked()) {
+        if (wallet->isLocked(/*fForMixing=*/false)) {
             manager->StopMixing();
         } else if (fAutoStart) {
             manager->StartMixing();

@@ -10,6 +10,9 @@
 
 class CoinJoinWalletManager;
 class CWallet;
+namespace interfaces {
+class WalletLoader;
+}
 
 namespace interfaces {
 namespace CoinJoin {
@@ -42,7 +45,7 @@ public:
 };
 } // namespace CoinJoin
 
-std::unique_ptr<CoinJoin::Loader> MakeCoinJoinLoader(CoinJoinWalletManager& walletman);
+std::unique_ptr<CoinJoin::Loader> MakeCoinJoinLoader(CoinJoinWalletManager& walletman, interfaces::WalletLoader& wallet_loader);
 
 } // namespace interfaces
 

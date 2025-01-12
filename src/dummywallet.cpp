@@ -12,6 +12,7 @@ namespace interfaces {
 class Chain;
 class Handler;
 class Wallet;
+class WalletLoader;
 }
 
 class DummyWalletInit : public WalletInitInterface {
@@ -23,8 +24,8 @@ public:
     void Construct(NodeContext& node) const override {LogPrintf("No wallet support compiled in!\n");}
 
     // Dash Specific WalletInitInterface InitCoinJoinSettings
-    void AutoLockMasternodeCollaterals() const override {}
-    void InitCoinJoinSettings(const CoinJoinWalletManager& cjwalletman) const override {}
+    void AutoLockMasternodeCollaterals(interfaces::WalletLoader& wallet_loader) const override {}
+    void InitCoinJoinSettings(interfaces::WalletLoader& wallet_loader, const CoinJoinWalletManager& cjwalletman) const override {}
     bool InitAutoBackup() const override {return true;}
 };
 
