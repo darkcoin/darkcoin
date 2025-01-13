@@ -8,6 +8,7 @@
 #include <memory>
 
 class ArgsManager;
+struct NodeContext;
 namespace interfaces {
 class Chain;
 namespace CoinJoin {
@@ -31,6 +32,12 @@ struct WalletContext {
     // TODO: replace this unique_ptr to a pointer
     // probably possible to do after bitcoin/bitcoin#22219
     const std::unique_ptr<interfaces::CoinJoin::Loader>& coinjoin_loader;
+    // Some Dash RPCs rely on WalletContext yet access NodeContext members
+    // even though wallet RPCs should refrain from accessing non-wallet
+    // capabilities (even though it is a hard ask sometimes). We should get
+    // rid of this at some point but until then, here's NodeContext.
+    // TODO: Get rid of this. It's not nice.
+    NodeContext* node_context{nullptr};
 
     //! Declare default constructor and destructor that are not inline, so code
     //! instantiating the WalletContext struct doesn't need to #include class
