@@ -161,18 +161,31 @@ template <typename Mutex, typename Base = typename Mutex::UniqueLock>
 class SCOPED_LOCKABLE UniqueLock : public Base
 {
 private:
+#ifdef DEBUG_LOCKCONTENTION
+    std::string m_lock_log_time_prefix;
+    std::chrono::microseconds m_started_time{};
+#endif
     void Enter(const char* pszName, const char* pszFile, int nLine)
     {
         EnterCritical(pszName, pszFile, nLine, Base::mutex());
 #ifdef DEBUG_LOCKCONTENTION
+        m_lock_log_time_prefix = strprintf("lock contention %s, %s:%d", pszName, pszFile, nLine);
+        m_started_time = GetTime<std::chrono::microseconds>();
         if (Base::try_lock()) return;
-        LOG_TIME_MICROS_WITH_CATEGORY(strprintf("lock contention %s, %s:%d", pszName, pszFile, nLine), BCLog::LOCK);
+        LOG_TIME_MICROS_WITH_CATEGORY(m_lock_log_time_prefix, BCLog::LOCK);
 #endif
         Base::lock();
+#ifdef DEBUG_LOCKCONTENTION
+        m_started_time = GetTime<std::chrono::microseconds>();
+#endif
     }
 
     bool TryEnter(const char* pszName, const char* pszFile, int nLine)
     {
+#ifdef DEBUG_LOCKCONTENTION
+        m_lock_log_time_prefix = strprintf("lock contention %s, %s:%d", pszName, pszFile, nLine);
+        m_started_time = GetTime<std::chrono::microseconds>();
+#endif
         EnterCritical(pszName, pszFile, nLine, Base::mutex(), true);
         if (Base::try_lock()) {
             return true;
@@ -203,8 +216,16 @@ public:
 
     ~UniqueLock() UNLOCK_FUNCTION()
     {
+#ifdef DEBUG_LOCKCONTENTION
+        const auto diff_time = (GetTime<std::chrono::microseconds>() - m_started_time);
+#endif
         if (Base::owns_lock())
             LeaveCritical();
+#ifdef DEBUG_LOCKCONTENTION
+        if (diff_time.count() > 100 && m_started_time.count() > 0) {
+            LogPrint(BCLog::LOCK, "%s inside %iμs\n", m_lock_log_time_prefix, diff_time.count());
+        }
+#endif
     }
 
     operator bool()
