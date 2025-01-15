@@ -791,7 +791,7 @@ private:
 
     /** Protects m_peer_map. This mutex must not be locked while holding a lock
      *  on any of the mutexes inside a Peer object. */
-    mutable Mutex m_peer_mutex;
+    mutable SharedMutex m_peer_mutex;
     /**
      * Map of all Peer objects, keyed by peer id. This map is protected
      * by the m_peer_mutex. Once a shared pointer reference is
@@ -1700,7 +1700,7 @@ void PeerManagerImpl::FinalizeNode(const CNode& node) {
 
 PeerRef PeerManagerImpl::GetPeerRef(NodeId id) const
 {
-    LOCK(m_peer_mutex);
+    READ_LOCK(m_peer_mutex);
     auto it = m_peer_map.find(id);
     return it != m_peer_map.end() ? it->second : nullptr;
 }
@@ -2270,7 +2270,7 @@ bool PeerManagerImpl::AlreadyHaveBlock(const uint256& block_hash)
 
 void PeerManagerImpl::SendPings()
 {
-    LOCK(m_peer_mutex);
+    READ_LOCK(m_peer_mutex);
     for(auto& it : m_peer_map) it.second->m_ping_queued = true;
 }
 
@@ -2280,7 +2280,7 @@ void PeerManagerImpl::AskPeersForTransaction(const uint256& txid, bool is_master
     peersToAsk.reserve(4);
 
     {
-        LOCK(m_peer_mutex);
+        READ_LOCK(m_peer_mutex);
         // TODO consider prioritizing MNs again, once that flag is moved into Peer
         for (const auto& [_, peer] : m_peer_map) {
             if (peersToAsk.size() >= 4) {
@@ -2345,7 +2345,7 @@ void PeerManagerImpl::RelayInv(CInv &inv, const int minProtoVersion)
 
 void PeerManagerImpl::RelayInv(CInv &inv)
 {
-    LOCK(m_peer_mutex);
+    READ_LOCK(m_peer_mutex);
     for (const auto& [_, peer] : m_peer_map) {
         if (!peer->GetInvRelay()) continue;
         PushInv(*peer, inv);
@@ -2357,7 +2357,7 @@ void PeerManagerImpl::RelayDSQ(const CCoinJoinQueue& queue)
     CInv inv{MSG_DSQ, queue.GetHash()};
     std::vector<NodeId> nodes_send_all;
     {
-        LOCK(m_peer_mutex);
+        READ_LOCK(m_peer_mutex);
         for (const auto& [nodeid, peer] : m_peer_map) {
             switch (peer->m_wants_dsq) {
             case Peer::WantsDSQ::NONE:
@@ -2438,7 +2438,7 @@ void PeerManagerImpl::RelayTransaction(const uint256& txid)
 void PeerManagerImpl::_RelayTransaction(const uint256& txid)
 {
     const CInv inv{m_cj_ctx->dstxman->GetDSTX(txid) ? MSG_DSTX : MSG_TX, txid};
-    LOCK(m_peer_mutex);
+    READ_LOCK(m_peer_mutex);
     for(auto& it : m_peer_map) {
         Peer& peer = *it.second;
         auto tx_relay = peer.GetTxRelay();
@@ -2451,7 +2451,7 @@ void PeerManagerImpl::_RelayTransaction(const uint256& txid)
 void PeerManagerImpl::RelayRecoveredSig(const uint256& sigHash)
 {
     const CInv inv{MSG_QUORUM_RECOVERED_SIG, sigHash};
-    LOCK(m_peer_mutex);
+    READ_LOCK(m_peer_mutex);
     for (const auto& [_, peer] : m_peer_map) {
         if (peer->m_wants_recsigs) {
             PushInv(*peer, inv);
@@ -2489,7 +2489,7 @@ void PeerManagerImpl::RelayAddress(NodeId originator,
     std::array<std::pair<uint64_t, Peer*>, 2> best{{{0, nullptr}, {0, nullptr}}};
     assert(nRelayNodes <= best.size());
 
-    LOCK(m_peer_mutex);
+    READ_LOCK(m_peer_mutex);
 
     for (auto& [id, peer] : m_peer_map) {
         if (peer->m_addr_relay_enabled && id != originator && IsAddrCompatible(*peer, addr)) {
