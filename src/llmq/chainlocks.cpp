@@ -6,6 +6,7 @@
 #include <llmq/quorums.h>
 #include <llmq/instantsend.h>
 #include <llmq/signing_shares.h>
+#include <evo/cbtx.h>
 
 #include <chain.h>
 #include <chainparams.h>
@@ -351,27 +352,36 @@ void CChainLocksHandler::BlockConnected(const std::shared_ptr<const CBlock>& pbl
     // We need this information later when we try to sign a new tip, so that we can determine if all included TXs are
     // safe.
 
-    LOCK(cs);
+    {
+        LOCK(cs);
 
-    auto it = blockTxs.find(pindex->GetBlockHash());
-    if (it == blockTxs.end()) {
-        // we must create this entry even if there are no lockable transactions in the block, so that TrySignChainTip
-        // later knows about this block
-        it = blockTxs.emplace(pindex->GetBlockHash(), std::make_shared<std::unordered_set<uint256, StaticSaltedHasher>>()).first;
-    }
-    auto& txids = *it->second;
-
-    int64_t curTime = GetTime<std::chrono::seconds>().count();
-
-    for (const auto& tx : pblock->vtx) {
-        if (tx->IsCoinBase() || tx->vin.empty()) {
-            continue;
+        auto it = blockTxs.find(pindex->GetBlockHash());
+        if (it == blockTxs.end()) {
+            // we must create this entry even if there are no lockable transactions in the block, so that TrySignChainTip later knows about this block
+            it = blockTxs
+                     .emplace(pindex->GetBlockHash(), std::make_shared<std::unordered_set<uint256, StaticSaltedHasher>>())
+                     .first;
         }
+        auto& txids = *it->second;
 
-        txids.emplace(tx->GetHash());
-        txFirstSeenTime.emplace(tx->GetHash(), curTime);
+        int64_t curTime = GetTime<std::chrono::seconds>().count();
+
+        for (const auto& tx : pblock->vtx) {
+            if (tx->IsCoinBase() || tx->vin.empty()) {
+                continue;
+            }
+
+            txids.emplace(tx->GetHash());
+            txFirstSeenTime.emplace(tx->GetHash(), curTime);
+        }
     }
+    auto cbtx = GetCoinbaseTx(pindex);
+    auto clsig_height = pindex->nHeight - cbtx->bestCLHeightDiff;
 
+    if (clsig_height > uint32_t(WITH_LOCK(cs, return bestChainLock.getHeight()))) {
+        auto clsig = CChainLockSig(clsig_height, pindex->GetAncestor(clsig_height)->GetBlockHash(), cbtx->bestCLSignature);
+        ProcessNewChainLock(-1, clsig, ::SerializeHash(clsig));
+    }
 }
 
 void CChainLocksHandler::BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, gsl::not_null<const CBlockIndex*> pindexDisconnected)
