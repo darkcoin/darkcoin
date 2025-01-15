@@ -45,8 +45,8 @@ public:
     void Construct(NodeContext& node) const override;
 
     // Dash Specific Wallet Init
-    void AutoLockMasternodeCollaterals() const override;
-    void InitCoinJoinSettings(const CoinJoinWalletManager& cjwalletman) const override;
+    void AutoLockMasternodeCollaterals(interfaces::WalletLoader& wallet_loader) const override;
+    void InitCoinJoinSettings(interfaces::WalletLoader& wallet_loader, const CoinJoinWalletManager& cjwalletman) const override;
     bool InitAutoBackup() const override;
 };
 
@@ -55,6 +55,7 @@ const WalletInitInterface& g_wallet_init_interface = WalletInit();
 void WalletInit::AddWalletOptions(ArgsManager& argsman) const
 {
     argsman.AddArg("-avoidpartialspends", strprintf("Group outputs by address, selecting many (possibly all) or none, instead of selecting on a per-output basis. Privacy is improved as addresses are mostly swept with fewer transactions and outputs are aggregated in clean change addresses. It may result in higher fees due to less optimal coin selection caused by this added limitation and possibly a larger-than-necessary number of inputs being used. Always enabled for wallets with \"avoid_reuse\" enabled, otherwise default: %u.", DEFAULT_AVOIDPARTIALSPENDS), ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-consolidatefeerate=<amt>", strprintf("The maximum feerate (in %s/kvB) at which transaction building may use more inputs than strictly necessary so that the wallet's UTXO pool can be reduced (default: %s).", CURRENCY_UNIT, FormatMoney(DEFAULT_CONSOLIDATE_FEERATE)), ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-createwalletbackups=<n>", strprintf("Number of automatic wallet backups (default: %u)", nWalletBackups), ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-disablewallet", "Do not load the wallet and disable wallet RPC calls", ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
 #if HAVE_SYSTEM
@@ -187,31 +188,32 @@ void WalletInit::Construct(NodeContext& node) const
         LogPrintf("Wallet disabled!\n");
         return;
     }
-    auto wallet_loader = interfaces::MakeWalletLoader(*node.chain, node.coinjoin_loader, args);
+    auto wallet_loader = interfaces::MakeWalletLoader(*node.chain, args, node, node.coinjoin_loader);
     node.wallet_loader = wallet_loader.get();
     node.chain_clients.emplace_back(std::move(wallet_loader));
 }
 
 
-void WalletInit::AutoLockMasternodeCollaterals() const
+void WalletInit::AutoLockMasternodeCollaterals(interfaces::WalletLoader& wallet_loader) const
 {
     // we can't do this before DIP3 is fully initialized
-    for (const auto& pwallet : GetWallets()) {
-        pwallet->AutoLockMasternodeCollaterals();
+    for (const auto& wallet : wallet_loader.getWallets()) {
+        wallet->autoLockMasternodeCollaterals();
     }
 }
 
-void WalletInit::InitCoinJoinSettings(const CoinJoinWalletManager& cjwalletman) const
+void WalletInit::InitCoinJoinSettings(interfaces::WalletLoader& wallet_loader, const CoinJoinWalletManager& cjwalletman) const
 {
-    CCoinJoinClientOptions::SetEnabled(!GetWallets().empty() ? gArgs.GetBoolArg("-enablecoinjoin", true) : false);
+    const auto& wallets{wallet_loader.getWallets()};
+    CCoinJoinClientOptions::SetEnabled(!wallets.empty() ? gArgs.GetBoolArg("-enablecoinjoin", true) : false);
     if (!CCoinJoinClientOptions::IsEnabled()) {
         return;
     }
     bool fAutoStart = gArgs.GetBoolArg("-coinjoinautostart", DEFAULT_COINJOIN_AUTOSTART);
-    for (auto& pwallet : GetWallets()) {
-        auto manager = cjwalletman.Get(pwallet->GetName());
+    for (auto& wallet : wallets) {
+        auto manager = cjwalletman.Get(wallet->getWalletName());
         assert(manager != nullptr);
-        if (pwallet->IsLocked()) {
+        if (wallet->isLocked(/*fForMixing=*/false)) {
             manager->StopMixing();
         } else if (fAutoStart) {
             manager->StartMixing();

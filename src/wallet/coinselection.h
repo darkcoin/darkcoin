@@ -57,6 +57,45 @@ public:
     }
 };
 
+/** Parameters for one iteration of Coin Selection. */
+struct CoinSelectionParams
+{
+    /** Size of a change output in bytes, determined by the output type. */
+    size_t change_output_size = 0;
+    /** Size of the input to spend a change output in virtual bytes. */
+    size_t change_spend_size = 0;
+    /** Cost of creating the change output. */
+    CAmount m_change_fee{0};
+    /** Cost of creating the change output + cost of spending the change output in the future. */
+    CAmount m_cost_of_change{0};
+    /** The fee to spend these UTXOs at the long term feerate. */
+    CFeeRate m_effective_feerate;
+    /** The feerate estimate used to estimate an upper bound on what should be sufficient to spend
+     * the change output sometime in the future. */
+    CFeeRate m_long_term_feerate;
+    /** If the cost to spend a change output at the discard feerate exceeds its value, drop it to fees. */
+    CFeeRate m_discard_feerate;
+    size_t tx_noinputs_size = 0;
+    /** Indicate that we are subtracting the fee from outputs */
+    bool m_subtract_fee_outputs = false;
+    /** When true, always spend all (up to OUTPUT_GROUP_MAX_ENTRIES) or none of the outputs
+     * associated with the same address. This helps reduce privacy leaks resulting from address
+     * reuse. Dust outputs are not eligible to be added to output groups and thus not considered. */
+    bool m_avoid_partial_spends = false;
+
+    CoinSelectionParams(size_t change_output_size, size_t change_spend_size, CFeeRate effective_feerate,
+                        CFeeRate long_term_feerate, CFeeRate discard_feerate, size_t tx_noinputs_size, bool avoid_partial) :
+        change_output_size(change_output_size),
+        change_spend_size(change_spend_size),
+        m_effective_feerate(effective_feerate),
+        m_long_term_feerate(long_term_feerate),
+        m_discard_feerate(discard_feerate),
+        tx_noinputs_size(tx_noinputs_size),
+        m_avoid_partial_spends(avoid_partial)
+    {}
+    CoinSelectionParams() {}
+};
+
 /** Parameters for filtering which OutputGroups we may use in coin selection.
  * We start by being very selective and requiring multiple confirmations and
  * then get more permissive if we cannot fund the transaction. */
@@ -109,18 +148,38 @@ struct OutputGroup
      * a lower feerate). Calculated using long term fee estimate. This is used to decide whether
      * it could be economical to create a change output. */
     CFeeRate m_long_term_feerate{0};
+    /** Indicate that we are subtracting the fee from outputs.
+     * When true, the value that is used for coin selection is the UTXO's real value rather than effective value */
+    bool m_subtract_fee_outputs{false};
 
     OutputGroup() {}
-    OutputGroup(const CFeeRate& effective_feerate, const CFeeRate& long_term_feerate) :
-        m_effective_feerate(effective_feerate),
-        m_long_term_feerate(long_term_feerate)
+    OutputGroup(const CoinSelectionParams& params) :
+        m_effective_feerate(params.m_effective_feerate),
+        m_long_term_feerate(params.m_long_term_feerate),
+        m_subtract_fee_outputs(params.m_subtract_fee_outputs)
     {}
 
     void Insert(const CInputCoin& output, int depth, bool from_me, size_t ancestors, size_t descendants, bool positive_only);
     bool EligibleForSpending(const CoinEligibilityFilter& eligibility_filter, bool isISLocked) const;
+    CAmount GetSelectionAmount() const;
 };
 
-bool SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool, const CAmount& target_value, const CAmount& cost_of_change, std::set<CInputCoin>& out_set, CAmount& value_ret, CAmount not_input_fees);
+/** Compute the waste for this result given the cost of change
+ * and the opportunity cost of spending these inputs now vs in the future.
+ * If change exists, waste = change_cost + inputs * (effective_feerate - long_term_feerate)
+ * If no change, waste = excess + inputs * (effective_feerate - long_term_feerate)
+ * where excess = selected_effective_value - target
+ * change_cost = effective_feerate * change_output_size + long_term_feerate * change_spend_size
+ *
+ * @param[in] inputs The selected inputs
+ * @param[in] change_cost The cost of creating change and spending it in the future. Only used if there is change. Must be 0 if there is no change.
+ * @param[in] target The amount targeted by the coin selection algorithm.
+ * @param[in] use_effective_value Whether to use the input's effective value (when true) or the real value (when false).
+ * @return The waste
+ */
+[[nodiscard]] CAmount GetSelectionWaste(const std::set<CInputCoin>& inputs, CAmount change_cost, CAmount target, bool use_effective_value = true);
+
+bool SelectCoinsBnB(std::vector<OutputGroup>& utxo_pool, const CAmount& selection_target, const CAmount& cost_of_change, std::set<CInputCoin>& out_set, CAmount& value_ret);
 
 // Original coin selection algorithm as a fallback
 bool KnapsackSolver(const CAmount& nTargetValue, std::vector<OutputGroup>& groups, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, bool fFulyMixedOnly, CAmount maxTxFee);

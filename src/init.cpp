@@ -25,11 +25,12 @@
 #include <httpserver.h>
 #include <httprpc.h>
 #include <init/common.h>
-#include <interfaces/chain.h>
 #include <index/blockfilterindex.h>
 #include <index/coinstatsindex.h>
 #include <index/txindex.h>
+#include <interfaces/chain.h>
 #include <interfaces/node.h>
+#include <interfaces/wallet.h>
 #include <mapport.h>
 #include <node/miner.h>
 #include <net.h>
@@ -1512,6 +1513,23 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     for (const auto& client : node.chain_clients) {
         client->registerRpcs();
     }
+#ifdef ENABLE_WALLET
+    // Register non-core wallet-only RPC commands. These are commands that
+    // aren't a part of the wallet library but heavily rely on wallet logic.
+    // TODO: Move them to chain client interfaces so they can be called
+    //       with registerRpcs()
+    if (!args.GetBoolArg("-disablewallet", DEFAULT_DISABLE_WALLET)) {
+        for (const auto& commands : {
+            GetWalletCoinJoinRPCCommands(),
+            GetWalletEvoRPCCommands(),
+            GetWalletGovernanceRPCCommands(),
+            GetWalletMasternodeRPCCommands(),
+        }) {
+            node.wallet_loader->registerOtherRpcs(commands);
+        }
+    }
+#endif // ENABLE_WALLET
+
 #if ENABLE_ZMQ
     RegisterZMQRPCCommands(tableRPC);
 #endif
@@ -2028,8 +2046,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
                                               !ignores_incoming_txs);
 
 #ifdef ENABLE_WALLET
-    node.coinjoin_loader = interfaces::MakeCoinJoinLoader(*node.cj_ctx->walletman);
-    g_wallet_init_interface.InitCoinJoinSettings(*node.cj_ctx->walletman);
+    if (!args.GetBoolArg("-disablewallet", DEFAULT_DISABLE_WALLET)) {
+        node.coinjoin_loader = interfaces::MakeCoinJoinLoader(*node.cj_ctx->walletman, *node.wallet_loader);
+    }
 #endif // ENABLE_WALLET
 
     // ********************************************************* Step 7d: Setup other Dash services
@@ -2206,6 +2225,11 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     chainman.m_load_block = std::thread(&util::TraceThread, "loadblk", [=, &args, &chainman, &node] {
         ThreadImport(chainman, *node.dmnman, *g_ds_notification_interface, vImportFiles, node.mn_activeman.get(), args);
     });
+#ifdef ENABLE_WALLET
+    if (!args.GetBoolArg("-disablewallet", DEFAULT_DISABLE_WALLET)) {
+        g_wallet_init_interface.AutoLockMasternodeCollaterals(*node.wallet_loader);
+    }
+#endif // ENABLE_WALLET
 
     // Wait for genesis block to be processed
     {

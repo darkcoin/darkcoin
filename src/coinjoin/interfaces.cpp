@@ -6,6 +6,7 @@
 
 #include <coinjoin/client.h>
 #include <wallet/wallet.h>
+#include <walletinitinterface.h>
 
 #include <memory>
 #include <string>
@@ -62,15 +63,25 @@ public:
 class CoinJoinLoaderImpl : public interfaces::CoinJoin::Loader
 {
     CoinJoinWalletManager& m_walletman;
+    interfaces::WalletLoader& m_wallet_loader;
 
 public:
-    explicit CoinJoinLoaderImpl(CoinJoinWalletManager& walletman)
-        : m_walletman(walletman) {}
+    explicit CoinJoinLoaderImpl(CoinJoinWalletManager& walletman, interfaces::WalletLoader& wallet_loader) :
+        m_walletman{walletman},
+        m_wallet_loader{wallet_loader}
+    {
+        g_wallet_init_interface.InitCoinJoinSettings(m_wallet_loader, m_walletman);
+    }
 
-    void AddWallet(const std::shared_ptr<CWallet>& wallet) override { m_walletman.Add(wallet); }
+    void AddWallet(const std::shared_ptr<CWallet>& wallet) override
+    {
+        m_walletman.Add(wallet);
+        g_wallet_init_interface.InitCoinJoinSettings(m_wallet_loader, m_walletman);
+    }
     void RemoveWallet(const std::string& name) override
     {
         m_walletman.Remove(name);
+        g_wallet_init_interface.InitCoinJoinSettings(m_wallet_loader, m_walletman);
     }
     void FlushWallet(const std::string& name) override
     {
@@ -91,5 +102,9 @@ public:
 } // namespace coinjoin
 
 namespace interfaces {
-std::unique_ptr<CoinJoin::Loader> MakeCoinJoinLoader(CoinJoinWalletManager& walletman) { return std::make_unique<coinjoin::CoinJoinLoaderImpl>(walletman); }
+std::unique_ptr<CoinJoin::Loader> MakeCoinJoinLoader(CoinJoinWalletManager& walletman,
+                                                     interfaces::WalletLoader& wallet_loader)
+{
+    return std::make_unique<coinjoin::CoinJoinLoaderImpl>(walletman, wallet_loader);
+}
 } // namespace interfaces
