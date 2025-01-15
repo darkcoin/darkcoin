@@ -2419,8 +2419,6 @@ bool CWalletTx::IsTrusted() const
 bool CWallet::IsTrusted(const CWalletTx& wtx, std::set<uint256>& trusted_parents) const
 {
     AssertLockHeld(cs_wallet);
-    // Quick answer in most cases
-    if (!chain().checkFinalTx(*wtx.tx)) return false;
     int nDepth = wtx.GetDepthInMainChain();
     if (nDepth >= 1) return true;
     if (nDepth < 0) return false;
@@ -2673,9 +2671,6 @@ void CWallet::AvailableCoins(std::vector<COutput> &vCoins, const CCoinControl* c
     std::set<uint256> trusted_parents;
     for (auto pcoin : GetSpendableTXs()) {
         const uint256& wtxid = pcoin->GetHash();
-
-        if (!chain().checkFinalTx(*pcoin->tx))
-            continue;
 
         if (pcoin->IsImmatureCoinBase())
             continue;
