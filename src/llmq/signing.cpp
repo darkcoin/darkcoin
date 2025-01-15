@@ -580,7 +580,7 @@ bool CSigningManager::ProcessPendingRecoveredSigs(PeerManager& peerman)
 
         if (batchVerifier.badSources.count(nodeId)) {
             LogPrint(BCLog::LLMQ, "CSigningManager::%s -- invalid recSig from other node, banning peer=%d\n", __func__, nodeId);
-            peerman.Misbehaving(nodeId, 100);
+            peerman.UnitTestMisbehaving(nodeId, 100);
             continue;
         }
 
