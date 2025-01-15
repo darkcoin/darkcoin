@@ -517,7 +517,11 @@ MessageProcessingResult CChainLocksHandler::HandleNewRecoveredSig(const llmq::CR
             // already got the same or a better CLSIG through the CLSIG message
             return {};
         }
-
+        const auto pindex = m_chainstate.m_chain.Tip()->GetAncestor(lastSignedHeight);
+        if (pindex == nullptr || pindex->GetBlockHash() != lastSignedMsgHash) {
+            // we switched to a different fork while we were signing
+            return {};
+        }
 
         clsig = CChainLockSig(lastSignedHeight, lastSignedMsgHash, recoveredSig.sig.Get());
     }
