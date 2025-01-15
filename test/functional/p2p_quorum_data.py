@@ -394,6 +394,8 @@ class QuorumDataMessagesTest(DashTestFramework):
 
         def test_rpc_quorum_getdata_protx_hash():
             self.log.info("Test optional proTxHash of `quorum getdata`")
+            assert_raises_rpc_error(-8, "Should not specify proTxHash",
+                                    mn1.node.quorum, "getdata", 0, 100, quorum_hash, 0x01, mn1.proTxHash)
             assert_raises_rpc_error(-8, "proTxHash missing",
                                     mn1.node.quorum, "getdata", 0, 100, quorum_hash, 0x02)
             assert_raises_rpc_error(-8, "proTxHash invalid",

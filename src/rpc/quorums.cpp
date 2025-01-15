@@ -806,8 +806,8 @@ static RPCHelpMan quorum_getdata()
     uint16_t nDataMask = static_cast<uint16_t>(ParseInt32V(request.params[3], "dataMask"));
     uint256 proTxHash;
 
-    // Check if request wants ENCRYPTED_CONTRIBUTIONS data
     if (nDataMask & llmq::CQuorumDataRequest::ENCRYPTED_CONTRIBUTIONS) {
+        // Require proTxHash if request wants ENCRYPTED_CONTRIBUTIONS data
         if (!request.params[4].isNull()) {
             proTxHash = ParseHashV(request.params[4], "proTxHash");
             if (proTxHash.IsNull()) {
@@ -816,6 +816,9 @@ static RPCHelpMan quorum_getdata()
         } else {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "proTxHash missing");
         }
+    } else if (!request.params[4].isNull()) {
+        // Require no proTxHash otherwise
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Should not specify proTxHash");
     }
 
     const auto quorum = llmq_ctx.qman->GetQuorum(llmqType, quorumHash);
