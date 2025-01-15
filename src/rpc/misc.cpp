@@ -44,14 +44,10 @@
 static RPCHelpMan debug()
 {
     return RPCHelpMan{"debug",
-        "Change debug category on the fly. Specify single category or use '+' to specify many.\n"
-        "The valid logging categories are: " + LogInstance().LogCategoriesString() + ".\n"
-        "libevent logging is configured on startup and cannot be modified by this RPC during runtime.\n"
-        "There are also a few meta-categories:\n"
-        " - \"all\", \"1\" and \"\" activate all categories at once;\n"
-        " - \"dash\" activates all Dash-specific categories at once;\n"
-        " - \"none\" (or \"0\") deactivates all categories at once.\n"
-        "Note: If specified category doesn't match any of the above, no error is thrown.\n",
+        "DEPRECATED. Use instead the 'logging' RPC instead.\n"
+        "For 'debug all': logging [\\\"all\\\"]\n"
+        "For 'debug none': logging []\n"
+        "For 'debug X+Y': logging \"[\\\"X\\\", \\\"Y\\\"]\"",
         {
             {"category", RPCArg::Type::STR, RPCArg::Optional::NO, "The name of the debug category to turn on."},
         },
@@ -64,6 +60,9 @@ static RPCHelpMan debug()
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+    if (!IsDeprecatedRPCEnabled("debug")) {
+        throw JSONRPCError(RPC_METHOD_DEPRECATED, "Please use logging instead");
+    }
 
     std::string strMode = request.params[0].get_str();
     LogInstance().DisableCategory(BCLog::ALL);
@@ -1411,7 +1410,6 @@ void RegisterMiscRPCCommands(CRPCTable &t)
 static const CRPCCommand commands[] =
 { //  category              actor (function)
   //  --------------------- ------------------------
-    { "control",            &debug,                   },
     { "control",            &getmemoryinfo,           },
     { "control",            &logging,                 },
     { "util",               &validateaddress,         },
@@ -1434,6 +1432,7 @@ static const CRPCCommand commands[] =
     { "dash",               &sporkupdate,             },
 
     /* Not shown in help */
+    { "hidden",             &debug,                   },
     { "hidden",             &setmocktime,             },
     { "hidden",             &mockscheduler,           },
     { "hidden",             &echo,                    },
